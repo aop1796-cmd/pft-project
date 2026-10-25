@@ -1,0 +1,10 @@
+{
+  "name": "pft-project",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "npm run build --prefix client",
+    "dev": "npm run dev --prefix client",
+    "start": "npm run preview --prefix client"
+  }
+}
