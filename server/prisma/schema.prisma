@@ -1,0 +1,168 @@
+// Prisma schema for Virtual Mechanics Lab – Experiment 5
+// Direct Central Impact & Coefficient of Restitution
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ──────────────────────────────────────────────────────────────────
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum QuestionType {
+  MCQ
+  VIVA
+}
+
+enum ReportStatus {
+  DRAFT
+  SUBMITTED
+  GRADED
+}
+
+// ── Models ─────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(STUDENT)
+  rollNo       String?
+  division     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  trials       Trial[]
+  reports      Report[]
+  quizAttempts QuizAttempt[]
+  refreshTokens RefreshToken[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Experiment {
+  id     String  @id @default(cuid())
+  title  String
+  slug   String  @unique
+  trials Trial[]
+}
+
+model Trial {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  experimentId String
+  experiment   Experiment @relation(fields: [experimentId], references: [id])
+
+  // Input parameters
+  h        Float  // height (m) from which ball A is released
+  y        Float  // height above ground (m) for the table/platform
+  mA       Float  // mass of ball A (kg)
+  mB       Float  // mass of ball B (kg)
+  material String // material preset name
+
+  // Measured values (landing distances)
+  XA Float // horizontal distance of ball A after impact
+  XB Float // horizontal distance of ball B after impact
+
+  // Computed velocities
+  UA Float // velocity of A before impact (m/s)
+  UB Float // velocity of B before impact = 0
+  VA Float // velocity of A after impact (m/s)
+  VB Float // velocity of B after impact (m/s)
+
+  // Result
+  e Float // coefficient of restitution
+
+  // Optional for realistic mode (with noise)
+  noiseApplied Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([experimentId])
+}
+
+model Report {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  experimentId   String?
+
+  // Computed results
+  meanE           Float
+  referenceE      Float
+  percentError    Float
+  conclusion      String       @db.Text
+  sourcesOfError  String[]
+  precautions     String[]
+
+  // Status & grading
+  status         ReportStatus @default(DRAFT)
+  marks          Float?
+  teacherRemarks String?      @db.Text
+  gradedBy       String?      // teacher userId
+
+  submittedAt    DateTime?
+  gradedAt       DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model QuizQuestion {
+  id          String       @id @default(cuid())
+  type        QuestionType
+  question    String       @db.Text
+  options     Json?        // JSON array for MCQ options
+  answer      String       @db.Text
+  explanation String?      @db.Text
+  orderIndex  Int          @default(0)
+
+  @@index([type])
+}
+
+model QuizAttempt {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  score     Int
+  total     Int
+  answers   Json     // { questionId: chosenAnswer }
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Material {
+  id         String @id @default(cuid())
+  name       String @unique
+  referenceE Float
+  color      String // hex color for UI
+  density    Float? // kg/m³, optional
+  description String?
+}
