@@ -1,12 +1,15 @@
 /**
  * Simulator Page
- * Canvas-based physics simulation of direct central impact
+ * Canvas-based physics simulation of direct central impact (Experiment 05)
+ *
  * Features:
- *  - Dual ball material selection (Ball A & Ball B) supporting Steel, Glass, Wood, Rubber, Clay
- *  - Interactive Material Reference card with Ball A and Ball B tabs
- *  - Release and Restart buttons placed right beside the figure, side by side
- *  - Smooth curved ramp with physically grounded rolling along the curve
- *  - Projectile trails, landing markers, dimension lines, and live readout
+ *  - Accurate Impact Apparatus matching the lab manual diagram (straight incline, smooth curve, horizontal platform)
+ *  - Ball A resting on the straight incline at Position 1 with release stopper pin
+ *  - Ball B resting on the horizontal platform lip at Position 2
+ *  - Coordinate axes: plumb line (x = 0), horizontal x-axis arrow (--> x), vertical y-axis, dimension h
+ *  - Side-by-side Release and Restart buttons located right beside the figure
+ *  - Dual material selection for both Ball A and Ball B across all 5 materials (Steel, Glass, Wood, Rubber, Clay)
+ *  - Permanent, live Step-by-Step Worked Calculation panel that updates in real time
  */
 
 import { useRef, useEffect, useState, useCallback } from 'react';
@@ -39,7 +42,7 @@ function getCombinedE(matA: string, matB: string): number {
   return +(Math.sqrt(eA * eB).toFixed(3));
 }
 
-// ── Canvas Renderer ───────────────────────────────────────────────────────
+// ── Canvas Renderer (Accurate Lab Manual Impact Apparatus) ─────────────────
 
 function drawSimulator(
   canvas: HTMLCanvasElement,
@@ -52,7 +55,7 @@ function drawSimulator(
     materialB: string;
     colorA: string;
     colorB: string;
-    animProgress: number; // 0 = idle, 0-0.5 = ball sliding, 0.5-1 = projectile phase
+    animProgress: number; // 0 = idle, 0..0.5 = ball sliding, 0.5..1.0 = projectile phase
     result: SimulationResult | null;
     isAnimating: boolean;
     showTrails: boolean;
@@ -67,15 +70,16 @@ function drawSimulator(
   // Clear
   ctx.clearRect(0, 0, W, H);
 
-  // Background gradient
+  // Background gradient: dark laboratory aesthetic
   const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, '#0d0d1a');
-  bg.addColorStop(1, '#0a0a0a');
+  bg.addColorStop(0, '#0c0d18');
+  bg.addColorStop(0.6, '#090a10');
+  bg.addColorStop(1, '#050608');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
-  // Grid dots
-  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  // Subtle grid dots
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.035)';
   for (let x = 0; x < W; x += 30) {
     for (let y = 0; y < H; y += 30) {
       ctx.beginPath();
@@ -84,230 +88,493 @@ function drawSimulator(
     }
   }
 
-  // ── Layout constants ──────────────────────────────────────────────────────
-  const MARGIN_LEFT = 55;
-  const MARGIN_RIGHT = 40;
-  const MARGIN_BOTTOM = 50;
+  // ── Layout Geometry (matching the lab manual image) ────────────────────────
+  const MARGIN_LEFT = 45;
+  const MARGIN_RIGHT = 35;
+  const GROUND_Y = H - 55;
 
-  const TABLE_X = W * 0.38; // where the table/platform exit is
-  const GROUND_Y = H - MARGIN_BOTTOM;
-  const TABLE_Y = GROUND_Y - (params.y / 1.0) * (H * 0.52); // scaled platform top
-  const RAMP_START_X = MARGIN_LEFT;
-  const RAMP_TOP_Y = TABLE_Y - (params.h / 0.5) * (H * 0.38); // top of ramp based on h
+  // Position 2 (horizontal platform exit edge where Ball B rests)
+  const TABLE_X = Math.round(W * 0.40);
 
-  // ── Ground ────────────────────────────────────────────────────────────────
-  ctx.strokeStyle = '#374151';
+  // Table elevation scaled proportionally from y (0.30 m - 1.00 m)
+  const normY = Math.max(0, Math.min(1, (params.y - 0.30) / (1.00 - 0.30)));
+  const minTableH = H * 0.28;
+  const maxTableH = H * 0.50;
+  const tableHeightPx = minTableH + normY * (maxTableH - minTableH);
+  const TABLE_Y = GROUND_Y - tableHeightPx;
+
+  // Release height scaled from h (0.05 m - 0.50 m)
+  const normH = Math.max(0, Math.min(1, (params.h - 0.05) / (0.50 - 0.05)));
+  const maxRampPx = Math.min(TABLE_Y - 45, H * 0.38);
+  const rampHeightPx = 35 + normH * (maxRampPx - 35);
+  const Y_RELEASE = TABLE_Y - rampHeightPx;
+
+  // Incline & fillet curve geometry:
+  // As shown in the manual: A long straight slope down at ~32 degrees,
+  // transitioning through a smooth circular curve to a short horizontal flat section!
+  const HORIZ_LEN = 44;
+  const KNEE_X = TABLE_X - HORIZ_LEN;
+  const R_CURVE = 64;
+  const THETA = (32 * Math.PI) / 180; // 32 degree straight incline
+  const cosT = Math.cos(THETA);
+  const sinT = Math.sin(THETA);
+  const tanT = Math.tan(THETA);
+
+  // Center of fillet transition arc (located ABOVE the track since it's concave up)
+  const XC = KNEE_X;
+  const YC = TABLE_Y - R_CURVE;
+
+  // Tangent point on incline
+  const x_tan = XC - R_CURVE * sinT;
+  const y_tan = YC + R_CURVE * cosT;
+
+  // Top of ramp structure
+  const Y_TOP = Math.max(28, TABLE_Y - maxRampPx - 25);
+  let x_top = x_tan - (y_tan - Y_TOP) / tanT;
+  if (x_top < MARGIN_LEFT) {
+    x_top = MARGIN_LEFT;
+  }
+
+  // ── 1. IMPACT APPARATUS Header ─────────────────────────────────────────────
+  ctx.save();
+  ctx.fillStyle = '#94A3B8';
+  ctx.font = 'bold 11px JetBrains Mono, monospace';
+  ctx.fillText('IMPACT APPARATUS', MARGIN_LEFT, 24);
+  ctx.strokeStyle = '#475569';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(MARGIN_LEFT, 29);
+  ctx.lineTo(MARGIN_LEFT + 120, 29);
+  ctx.stroke();
+  ctx.restore();
+
+  // ── 2. Apparatus Table & Support Stand ──────────────────────────────────────
+  // Main vertical column under Position 2
+  const colWidth = 14;
+  const colLeft = TABLE_X - colWidth;
+  const standGrad = ctx.createLinearGradient(colLeft, 0, colLeft + colWidth, 0);
+  standGrad.addColorStop(0, '#334155');
+  standGrad.addColorStop(0.4, '#475569');
+  standGrad.addColorStop(1, '#1E293B');
+
+  ctx.fillStyle = standGrad;
+  ctx.fillRect(colLeft, TABLE_Y, colWidth, GROUND_Y - TABLE_Y);
+  ctx.strokeStyle = '#64748B';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(colLeft, TABLE_Y, colWidth, GROUND_Y - TABLE_Y);
+
+  // Base foot on the ground with leveling screws
+  const footWidth = 46;
+  const footLeft = TABLE_X - footWidth / 2 - 2;
+  ctx.fillStyle = '#1E293B';
+  ctx.fillRect(footLeft, GROUND_Y - 5, footWidth, 5);
+  ctx.strokeStyle = '#64748B';
+  ctx.strokeRect(footLeft, GROUND_Y - 5, footWidth, 5);
+
+  // Diagonal support strut under curved knee
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(KNEE_X - 8, TABLE_Y + 4);
+  ctx.lineTo(colLeft, TABLE_Y + (GROUND_Y - TABLE_Y) * 0.45);
+  ctx.stroke();
+
+  // Table top mounting plate
+  ctx.fillStyle = '#475569';
+  ctx.fillRect(KNEE_X - 14, TABLE_Y, HORIZ_LEN + 16, 5);
+
+  // ── 3. Ramp Guide Rails (Double-Rail Channel as in Manual) ─────────────────
+  const BALL_R = 10;
+  const RAIL_OFFSET = 6;
+
+  // Lower rail (depth shadow / secondary channel)
+  ctx.save();
+  ctx.strokeStyle = '#78350F';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(x_top - RAIL_OFFSET * sinT, Y_TOP + RAIL_OFFSET * cosT);
+  ctx.lineTo(x_tan - RAIL_OFFSET * sinT, y_tan + RAIL_OFFSET * cosT);
+  ctx.arc(XC, YC, R_CURVE + RAIL_OFFSET, Math.PI / 2 + THETA, Math.PI / 2, true);
+  ctx.lineTo(TABLE_X, TABLE_Y + RAIL_OFFSET);
+  ctx.stroke();
+
+  // Cross-struts connecting rails (track ties)
+  ctx.strokeStyle = '#92400E';
+  ctx.lineWidth = 1.2;
+  const numTies = 11;
+  for (let i = 0; i <= numTies; i++) {
+    const tFrac = i / numTies;
+    const tieX = x_top + tFrac * (x_tan - x_top);
+    const tieY = Y_TOP + tFrac * (y_tan - Y_TOP);
+    ctx.beginPath();
+    ctx.moveTo(tieX, tieY);
+    ctx.lineTo(tieX - RAIL_OFFSET * sinT, tieY + RAIL_OFFSET * cosT);
+    ctx.stroke();
+  }
+
+  // Upper main guide rail (amber glowing track)
+  ctx.strokeStyle = '#F59E0B';
+  ctx.lineWidth = 3.5;
+  ctx.shadowColor = 'rgba(245, 158, 11, 0.45)';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(x_top, Y_TOP);
+  ctx.lineTo(x_tan, y_tan);
+  ctx.arc(XC, YC, R_CURVE, Math.PI / 2 + THETA, Math.PI / 2, true);
+  ctx.lineTo(TABLE_X, TABLE_Y);
+  ctx.stroke();
+
+  // Rail highlight
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#FEF08A';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x_top, Y_TOP);
+  ctx.lineTo(x_tan, y_tan);
+  ctx.arc(XC, YC, R_CURVE, Math.PI / 2 + THETA, Math.PI / 2, true);
+  ctx.lineTo(TABLE_X, TABLE_Y);
+  ctx.stroke();
+  ctx.restore();
+
+  // ── 4. Position 1 (Release Point on Incline) ────────────────────────────────
+  // Located on the straight incline at vertical height Y_RELEASE
+  const x_pos1 = x_tan - (y_tan - Y_RELEASE) / tanT;
+  const y_pos1 = Y_RELEASE;
+
+  // Ball A rests ON TOP of the straight incline track:
+  // Normal vector pointing outward/upward from track: (+sinT, -cosT)
+  const xA_rest = x_pos1 + BALL_R * sinT;
+  const yA_rest = y_pos1 - BALL_R * cosT;
+
+  // Release stopper pin at Position 1 (holding Ball A)
+  ctx.save();
+  ctx.strokeStyle = '#E2E8F0';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(x_pos1, y_pos1);
+  ctx.lineTo(x_pos1 + 12 * sinT, y_pos1 - 12 * cosT);
+  ctx.stroke();
+  ctx.fillStyle = '#CBD5E1';
+  ctx.beginPath();
+  ctx.arc(x_pos1 + 12 * sinT, y_pos1 - 12 * cosT, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // ── 5. Position 2 (Exit Point on Horizontal Platform) ──────────────────────
+  // Ball B rests on the horizontal track lip at Position 2 with center over plumb line
+  const xB_rest = TABLE_X;
+  const yB_rest = TABLE_Y - BALL_R;
+
+  // ── 6. Ground & Ruler ──────────────────────────────────────────────────────
+  ctx.strokeStyle = '#475569';
   ctx.lineWidth = 2;
-  ctx.setLineDash([6, 4]);
   ctx.beginPath();
   ctx.moveTo(MARGIN_LEFT, GROUND_Y);
   ctx.lineTo(W - MARGIN_RIGHT, GROUND_Y);
   ctx.stroke();
-  ctx.setLineDash([]);
 
   // Ground diagonal hatching (////)
-  ctx.strokeStyle = '#272f3d';
+  ctx.strokeStyle = '#334155';
   ctx.lineWidth = 1;
-  for (let gx = MARGIN_LEFT; gx < W - MARGIN_RIGHT; gx += 12) {
+  for (let gx = MARGIN_LEFT; gx < W - MARGIN_RIGHT - 10; gx += 10) {
     ctx.beginPath();
     ctx.moveTo(gx, GROUND_Y + 2);
-    ctx.lineTo(gx - 6, GROUND_Y + 8);
+    ctx.lineTo(gx - 6, GROUND_Y + 9);
     ctx.stroke();
   }
 
-  // Ruler on ground
-  ctx.fillStyle = '#374151';
-  ctx.fillRect(MARGIN_LEFT, GROUND_Y + 1, W - MARGIN_LEFT - MARGIN_RIGHT, 3);
-  for (let px = MARGIN_LEFT; px < W - MARGIN_RIGHT; px += 20) {
-    ctx.fillStyle = '#4B5563';
-    ctx.fillRect(px, GROUND_Y + 1, 1, (px - MARGIN_LEFT) % 100 === 0 ? 8 : 4);
+  // "GROUND" text annotation
+  ctx.fillStyle = '#64748B';
+  ctx.font = 'bold 9px JetBrains Mono, monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText('GROUND', W - MARGIN_RIGHT, GROUND_Y - 7);
+  ctx.textAlign = 'left';
+
+  // Ruler ticks on ground from plumb line (TABLE_X) to the right
+  for (let rx = TABLE_X; rx <= W - MARGIN_RIGHT; rx += 25) {
+    const isMajor = (rx - TABLE_X) % 100 === 0;
+    const tickH = isMajor ? 8 : 4;
+    ctx.strokeStyle = isMajor ? '#94A3B8' : '#475569';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(rx, GROUND_Y);
+    ctx.lineTo(rx, GROUND_Y + tickH);
+    ctx.stroke();
   }
 
-  // ── Table platform & Stand ────────────────────────────────────────────────
-  const legW = 12;
-  ctx.fillStyle = '#1F2937';
-  ctx.strokeStyle = '#374151';
-  ctx.lineWidth = 1.5;
-  ctx.fillRect(TABLE_X - legW, TABLE_Y, legW, GROUND_Y - TABLE_Y);
-  ctx.strokeRect(TABLE_X - legW, TABLE_Y, legW, GROUND_Y - TABLE_Y);
-
-  // Platform top surface
-  ctx.fillStyle = '#374151';
-  ctx.fillRect(RAMP_START_X + 50, TABLE_Y, TABLE_X - RAMP_START_X - 50 + 4, 4);
-
-  // ── Plumb Line from Position 2 to Ground ──────────────────────────────────
-  ctx.strokeStyle = '#4B5563';
-  ctx.lineWidth = 1;
+  // ── 7. Coordinate Axes: Plumb Line & Horizontal x-Axis ─────────────────────
+  // Plumb line: dashed vertical line dropping directly from Position 2 (Ball B) to ground
+  ctx.strokeStyle = '#64748B';
+  ctx.lineWidth = 1.2;
   ctx.setLineDash([4, 4]);
   ctx.beginPath();
-  ctx.moveTo(TABLE_X, TABLE_Y);
+  ctx.moveTo(TABLE_X, TABLE_Y - BALL_R);
   ctx.lineTo(TABLE_X, GROUND_Y);
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Horizontal x-axis arrow from Position 2
-  const xAxisLen = Math.min(140, W - MARGIN_RIGHT - TABLE_X - 10);
-  ctx.strokeStyle = '#64748B';
-  ctx.lineWidth = 1;
-  ctx.setLineDash([4, 4]);
+  // Plumb mark at ground level x = 0
+  ctx.fillStyle = '#94A3B8';
   ctx.beginPath();
-  ctx.moveTo(TABLE_X, TABLE_Y);
-  ctx.lineTo(TABLE_X + xAxisLen, TABLE_Y);
+  ctx.arc(TABLE_X, GROUND_Y, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Horizontal x-axis arrow extending to the right from Position 2 (Ball B center)
+  const x_axis_len = Math.min(180, (W - MARGIN_RIGHT) - TABLE_X - 10);
+  ctx.save();
+  ctx.strokeStyle = '#94A3B8';
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  ctx.moveTo(TABLE_X, TABLE_Y - BALL_R);
+  ctx.lineTo(TABLE_X + x_axis_len, TABLE_Y - BALL_R);
   ctx.stroke();
   ctx.setLineDash([]);
-  // Arrowhead
-  ctx.fillStyle = '#64748B';
+
+  // Arrowhead pointing right
+  ctx.fillStyle = '#94A3B8';
   ctx.beginPath();
-  ctx.moveTo(TABLE_X + xAxisLen, TABLE_Y);
-  ctx.lineTo(TABLE_X + xAxisLen - 6, TABLE_Y - 3);
-  ctx.lineTo(TABLE_X + xAxisLen - 6, TABLE_Y + 3);
+  ctx.moveTo(TABLE_X + x_axis_len, TABLE_Y - BALL_R);
+  ctx.lineTo(TABLE_X + x_axis_len - 7, TABLE_Y - BALL_R - 3.5);
+  ctx.lineTo(TABLE_X + x_axis_len - 7, TABLE_Y - BALL_R + 3.5);
   ctx.closePath();
   ctx.fill();
-  ctx.font = 'italic 10px JetBrains Mono, monospace';
-  ctx.fillText('x', TABLE_X + xAxisLen + 4, TABLE_Y + 3);
 
-  // ── Curved Ramp ───────────────────────────────────────────────────────────
-  // Smoothly curves from top release point down to table level
-  ctx.strokeStyle = '#F59E0B';
-  ctx.lineWidth = 3.5;
-  ctx.shadowColor = 'rgba(245,158,11,0.45)';
-  ctx.shadowBlur = 8;
-  ctx.beginPath();
-  ctx.moveTo(RAMP_START_X, RAMP_TOP_Y);
-  ctx.bezierCurveTo(
-    RAMP_START_X + (TABLE_X - RAMP_START_X) * 0.28, RAMP_TOP_Y + (TABLE_Y - RAMP_TOP_Y) * 0.1,
-    RAMP_START_X + (TABLE_X - RAMP_START_X) * 0.65, TABLE_Y,
-    TABLE_X, TABLE_Y
-  );
-  ctx.stroke();
-  ctx.shadowBlur = 0;
+  // Label 'x'
+  ctx.font = 'italic 11px JetBrains Mono, monospace';
+  ctx.fillText('x', TABLE_X + x_axis_len + 6, TABLE_Y - BALL_R + 3.5);
+  ctx.restore();
 
-  // Ramp vertical dashed support line
-  ctx.strokeStyle = '#374151';
+  // ── 8. Dimension Lines: h and y ────────────────────────────────────────────
+  // Dimension h (vertical height between Position 1 and Position 2 level)
+  const h_dim_x = Math.max(18, x_pos1 - 28);
+  ctx.strokeStyle = '#475569';
   ctx.lineWidth = 1;
   ctx.setLineDash([3, 3]);
   ctx.beginPath();
-  ctx.moveTo(RAMP_START_X, RAMP_TOP_Y);
-  ctx.lineTo(RAMP_START_X, TABLE_Y);
+  ctx.moveTo(h_dim_x - 4, yA_rest);
+  ctx.lineTo(xA_rest, yA_rest);
+  ctx.moveTo(h_dim_x - 4, TABLE_Y - BALL_R);
+  ctx.lineTo(TABLE_X, TABLE_Y - BALL_R);
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // ── Dimension Lines ───────────────────────────────────────────────────────
-  // h – height of ramp release point
-  drawDimensionLine(ctx, RAMP_START_X - 20, RAMP_TOP_Y, RAMP_START_X - 20, TABLE_Y, '#38BDF8', `h = ${params.h.toFixed(2)} m`);
+  // Vertical dimension line for h
+  drawDimensionLine(
+    ctx,
+    h_dim_x,
+    yA_rest,
+    h_dim_x,
+    TABLE_Y - BALL_R,
+    '#38BDF8',
+    `h = ${params.h.toFixed(3)} m`,
+    true
+  );
 
-  // y – table height above ground
-  drawDimensionLine(ctx, TABLE_X + 25, TABLE_Y, TABLE_X + 25, GROUND_Y, '#10B981', `y = ${params.y.toFixed(2)} m`);
+  // Dimension y (table height from Position 2 to ground)
+  const y_dim_x = TABLE_X + 28;
+  ctx.strokeStyle = '#475569';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(TABLE_X, TABLE_Y);
+  ctx.lineTo(y_dim_x + 4, TABLE_Y);
+  ctx.moveTo(TABLE_X, GROUND_Y);
+  ctx.lineTo(y_dim_x + 4, GROUND_Y);
+  ctx.stroke();
+  ctx.setLineDash([]);
 
-  // ── Ball B at rest (Position 2) ────────────────────────────────────────────
-  const BALL_R = 10;
-  const B_REST_X = TABLE_X;
-  const B_REST_Y = TABLE_Y - BALL_R;
+  drawDimensionLine(
+    ctx,
+    y_dim_x,
+    TABLE_Y,
+    y_dim_x,
+    GROUND_Y,
+    '#10B981',
+    `y = ${params.y.toFixed(2)} m`,
+    true
+  );
 
-  // ── Ball A at start (Position 1) ───────────────────────────────────────────
-  const A_START_X = RAMP_START_X + 12;
-  const A_START_Y = RAMP_TOP_Y + 3;
+  // ── 9. Static Labels: POSITION 1 & POSITION 2 ──────────────────────────────
+  ctx.save();
+  ctx.font = 'bold 9px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
 
-  if (params.animProgress < 0.5 || !params.result) {
-    // Ball B rests at Position 2 before impact
-    drawBall(ctx, B_REST_X, B_REST_Y, BALL_R, params.colorB, 'B');
+  // Position 1 label
+  ctx.fillStyle = '#38BDF8';
+  ctx.fillText('POSITION 1', xA_rest, yA_rest - BALL_R - 14);
+  ctx.fillStyle = params.colorA;
+  ctx.fillText(`BALL A (${params.materialA})`, xA_rest, yA_rest - BALL_R - 4);
+
+  // Position 2 label
+  ctx.fillStyle = '#10B981';
+  ctx.fillText('POSITION 2', xB_rest, yB_rest - BALL_R - 14);
+  ctx.fillStyle = params.colorB;
+  ctx.fillText(`BALL B (${params.materialB})`, xB_rest, yB_rest - BALL_R - 4);
+  ctx.restore();
+
+  // ── 10. Animation: Rolling along Curve, Collision & Projectile Flight ──────
+  const R_EFF = R_CURVE - BALL_R;
+  const L1 = (y_tan - y_pos1) / sinT;
+  const L2 = R_EFF * THETA;
+  const L3 = Math.max(0, (TABLE_X - 2 * BALL_R) - KNEE_X);
+  const S_TOTAL = L1 + L2 + L3;
+
+  function getBallAPosAlongTrack(s: number): { x: number; y: number } {
+    if (s <= L1) {
+      // On straight incline
+      const xt = x_pos1 + s * cosT;
+      const yt = y_pos1 + s * sinT;
+      return {
+        x: xt + BALL_R * sinT,
+        y: yt - BALL_R * cosT,
+      };
+    } else if (s <= L1 + L2) {
+      // On fillet arc (riding smoothly on top of the concave arc)
+      const sArc = s - L1;
+      const phi = THETA - sArc / R_EFF;
+      return {
+        x: XC - R_EFF * Math.sin(phi),
+        y: YC + R_EFF * Math.cos(phi),
+      };
+    } else {
+      // On horizontal flat track
+      const sFlat = s - (L1 + L2);
+      return {
+        x: KNEE_X + sFlat,
+        y: TABLE_Y - BALL_R,
+      };
+    }
   }
 
+  // Scale factor for projectile flight distance
+  const availFlightW = (W - MARGIN_RIGHT) - TABLE_X;
+  const maxFlightMeters = params.result
+    ? Math.max(params.result.XB, Math.abs(params.result.XA), 0.45) * 1.16
+    : 0.8;
+  const scaleX = availFlightW / maxFlightMeters;
+
   if (params.animProgress < 0.5) {
-    // Sliding phase: Ball A moves down along the ramp curve
-    const progress = params.animProgress * 2; // 0→1
-    const t = easeIn(progress); // smooth gravity acceleration
+    // ── SLIDING PHASE: Ball A rolls down ramp to strike Ball B ─────────────────
+    const u = params.animProgress * 2; // 0 -> 1
+    const sCurrent = S_TOTAL * (u * u);
+    const aPos = getBallAPosAlongTrack(sCurrent);
 
-    // Quadratic interpolation along the ramp curve
-    const P0 = { x: A_START_X, y: A_START_Y };
-    const P1 = { x: RAMP_START_X + (TABLE_X - RAMP_START_X) * 0.5, y: TABLE_Y - BALL_R };
-    const P2 = { x: B_REST_X - BALL_R * 2, y: TABLE_Y - BALL_R };
+    // Ball B rests at Position 2
+    drawBall(ctx, xB_rest, yB_rest, BALL_R, params.colorB, 'B');
 
-    const ax = (1 - t) * (1 - t) * P0.x + 2 * (1 - t) * t * P1.x + t * t * P2.x;
-    const ay = (1 - t) * (1 - t) * P0.y + 2 * (1 - t) * t * P1.y + t * t * P2.y;
-
-    drawBall(ctx, ax, ay, BALL_R, params.colorA, 'A');
-
-    // Labels
-    if (params.animProgress === 0) {
-      drawLabel(ctx, A_START_X, A_START_Y - BALL_R - 6, `Pos 1 (${params.materialA})`, params.colorA);
-      drawLabel(ctx, B_REST_X, B_REST_Y - BALL_R - 6, `Pos 2 (${params.materialB})`, params.colorB);
-    }
+    // Draw moving Ball A
+    drawBall(ctx, aPos.x, aPos.y, BALL_R, params.colorA, 'A');
   } else if (params.result) {
-    // Projectile phase: both balls fly off horizontally from Position 2
-    const progress = (params.animProgress - 0.5) * 2; // 0→1
-    const { VA, VB, t: flightTime, XA, XB } = params.result;
+    // ── PROJECTILE PHASE: Both balls fly off horizontally ──────────────────────
+    const u = (params.animProgress - 0.5) * 2; // 0 -> 1
+    const { VA, VB, XA, XB } = params.result;
 
-    // Scale factors for canvas display
-    const availWidth = (W - MARGIN_RIGHT) - TABLE_X;
-    const maxMeters = Math.max(Math.abs(XA), XB, 0.4) * 1.15;
-    const xScale = availWidth / maxMeters;
-    const gravScale = GROUND_Y - TABLE_Y;
+    const dropPx = (u * u) * (GROUND_Y - (TABLE_Y - BALL_R));
 
-    const elapsedT = progress * flightTime;
-    const subG = G;
+    const aCurrentX = (TABLE_X - 2 * BALL_R) + u * (XA * scaleX);
+    const aCurrentY = Math.min(GROUND_Y, (TABLE_Y - BALL_R) + dropPx);
 
-    // Ball A position
-    const aFinalX = TABLE_X + VA * elapsedT * xScale;
-    const aFinalY = TABLE_Y + 0.5 * subG * elapsedT ** 2 * (gravScale / (0.5 * subG * flightTime ** 2));
-    drawBall(ctx, aFinalX, Math.min(aFinalY, GROUND_Y - BALL_R), BALL_R, params.colorA, 'A');
+    const bCurrentX = TABLE_X + u * (XB * scaleX);
+    const bCurrentY = Math.min(GROUND_Y, (TABLE_Y - BALL_R) + dropPx);
 
-    // Ball B position
-    const bFinalX = TABLE_X + VB * elapsedT * xScale;
-    const bFinalY = TABLE_Y + 0.5 * subG * elapsedT ** 2 * (gravScale / (0.5 * subG * flightTime ** 2));
-    drawBall(ctx, bFinalX, Math.min(bFinalY, GROUND_Y - BALL_R), BALL_R, params.colorB, 'B');
-
-    // Trails (dashed in each ball's distinct color)
-    if (params.showTrails && progress > 0.04) {
-      // Ball A Trail
+    // Parabolic Dashed Trails
+    if (params.showTrails && u > 0.02) {
+      // Trail A
       ctx.save();
       ctx.strokeStyle = params.colorA;
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1.8;
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
-      ctx.moveTo(TABLE_X, TABLE_Y);
-      ctx.quadraticCurveTo(TABLE_X + (VA * flightTime * xScale * progress) / 2, TABLE_Y + 20, aFinalX, aFinalY);
+      const numSteps = 40;
+      for (let i = 0; i <= Math.floor(u * numSteps); i++) {
+        const stepU = i / numSteps;
+        const tx = (TABLE_X - 2 * BALL_R) + stepU * (XA * scaleX);
+        const ty = (TABLE_Y - BALL_R) + (stepU * stepU) * (GROUND_Y - (TABLE_Y - BALL_R));
+        if (i === 0) ctx.moveTo(tx, ty);
+        else ctx.lineTo(tx, ty);
+      }
       ctx.stroke();
 
-      // Ball B Trail
+      // Trail B
       ctx.strokeStyle = params.colorB;
       ctx.beginPath();
-      ctx.moveTo(TABLE_X, TABLE_Y);
-      ctx.quadraticCurveTo(TABLE_X + (VB * flightTime * xScale * progress) / 2, TABLE_Y + 20, bFinalX, bFinalY);
+      for (let i = 0; i <= Math.floor(u * numSteps); i++) {
+        const stepU = i / numSteps;
+        const tx = TABLE_X + stepU * (XB * scaleX);
+        const ty = (TABLE_Y - BALL_R) + (stepU * stepU) * (GROUND_Y - (TABLE_Y - BALL_R));
+        if (i === 0) ctx.moveTo(tx, ty);
+        else ctx.lineTo(tx, ty);
+      }
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.restore();
     }
 
-    // When animation completes, show landing markers and XA, XB dimension lines
-    if (progress >= 0.98 || !params.isAnimating) {
-      const xA_canvas = TABLE_X + VA * flightTime * xScale;
-      const xB_canvas = TABLE_X + VB * flightTime * xScale;
+    // Draw the flying balls
+    drawBall(ctx, aCurrentX, aCurrentY, BALL_R, params.colorA, 'A');
+    drawBall(ctx, bCurrentX, bCurrentY, BALL_R, params.colorB, 'B');
 
-      // Landing markers
+    // ── Landing Markers & Xa, Xb Dimensions ───────────────────────────────────
+    if (u >= 0.98 || !params.isAnimating) {
+      const xA_land = (TABLE_X - 2 * BALL_R) + XA * scaleX;
+      const xB_land = TABLE_X + XB * scaleX;
+
+      // Landing markers on ground
       ctx.fillStyle = params.colorA;
-      ctx.fillRect(xA_canvas - 1.5, GROUND_Y - 4, 3, 10);
+      ctx.fillRect(xA_land - 1.5, GROUND_Y - 4, 3, 10);
+
       ctx.fillStyle = params.colorB;
-      ctx.fillRect(xB_canvas - 1.5, GROUND_Y - 4, 3, 10);
+      ctx.fillRect(xB_land - 1.5, GROUND_Y - 4, 3, 10);
 
-      // XA dimension line
-      drawDimensionLine(ctx, TABLE_X, GROUND_Y + 18, xA_canvas, GROUND_Y + 18, params.colorA, `XA = ${XA.toFixed(3)} m`);
-      // XB dimension line
-      drawDimensionLine(ctx, TABLE_X, GROUND_Y + 32, xB_canvas, GROUND_Y + 32, params.colorB, `XB = ${XB.toFixed(3)} m`);
+      // Vertical dashed projection lines from landing points down to dimension lines
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 2]);
+      ctx.beginPath();
+      ctx.moveTo(xA_land, GROUND_Y);
+      ctx.lineTo(xA_land, GROUND_Y + 22);
+      ctx.moveTo(xB_land, GROUND_Y);
+      ctx.lineTo(xB_land, GROUND_Y + 38);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Dimension line for X_a
+      drawDimensionLine(
+        ctx,
+        TABLE_X,
+        GROUND_Y + 18,
+        xA_land,
+        GROUND_Y + 18,
+        params.colorA,
+        `X_a = ${XA.toFixed(3)} m`,
+        false
+      );
+
+      // Dimension line for X_b
+      drawDimensionLine(
+        ctx,
+        TABLE_X,
+        GROUND_Y + 34,
+        xB_land,
+        GROUND_Y + 34,
+        params.colorB,
+        `X_b = ${XB.toFixed(3)} m`,
+        false
+      );
     }
+  } else {
+    // Idle state: draw balls resting at Position 1 and Position 2
+    drawBall(ctx, xA_rest, yA_rest, BALL_R, params.colorA, 'A');
+    drawBall(ctx, xB_rest, yB_rest, BALL_R, params.colorB, 'B');
   }
-
-  // Ground label
-  ctx.fillStyle = '#4B5563';
-  ctx.font = '11px JetBrains Mono, monospace';
-  ctx.fillText('Ground', MARGIN_LEFT + 4, GROUND_Y - 6);
 }
 
 function drawBall(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string, label: string) {
   ctx.save();
   // Glow
   ctx.shadowColor = color;
-  ctx.shadowBlur = 12;
+  ctx.shadowBlur = 10;
 
   // 3D gradient sphere
   const grad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
@@ -321,6 +588,16 @@ function drawBall(ctx: CanvasRenderingContext2D, x: number, y: number, r: number
   ctx.fill();
   ctx.shadowBlur = 0;
 
+  // Engineering crosshair '+' through center (matching manual diagram)
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x - r * 0.7, y);
+  ctx.lineTo(x + r * 0.7, y);
+  ctx.moveTo(x, y - r * 0.7);
+  ctx.lineTo(x, y + r * 0.7);
+  ctx.stroke();
+
   // Label
   ctx.fillStyle = '#FFFFFF';
   ctx.font = 'bold 9px JetBrains Mono, monospace';
@@ -333,42 +610,72 @@ function drawBall(ctx: CanvasRenderingContext2D, x: number, y: number, r: number
 function drawDimensionLine(
   ctx: CanvasRenderingContext2D,
   x1: number, y1: number, x2: number, y2: number,
-  color: string, label: string
+  color: string, label: string,
+  isVertical: boolean
 ) {
   ctx.save();
   ctx.strokeStyle = color;
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 1.2;
   ctx.setLineDash([3, 3]);
 
-  // Arrow heads
+  // Main line
   ctx.beginPath();
   ctx.moveTo(x1, y1);
   ctx.lineTo(x2, y2);
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Tick marks
-  const isVertical = Math.abs(x2 - x1) < 2;
+  // End ticks and arrowheads
   if (isVertical) {
-    ctx.beginPath(); ctx.moveTo(x1 - 5, y1); ctx.lineTo(x1 + 5, y1); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x2 - 5, y2); ctx.lineTo(x2 + 5, y2); ctx.stroke();
+    const minY = Math.min(y1, y2);
+    const maxY = Math.max(y1, y2);
+    const midY = (minY + maxY) / 2;
+
+    // End cross ticks
+    ctx.beginPath();
+    ctx.moveTo(x1 - 4, minY); ctx.lineTo(x1 + 4, minY);
+    ctx.moveTo(x1 - 4, maxY); ctx.lineTo(x1 + 4, maxY);
+    ctx.stroke();
+
+    // Arrowheads
     ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x1, minY); ctx.lineTo(x1 - 2.5, minY + 5); ctx.lineTo(x1 + 2.5, minY + 5); ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x1, maxY); ctx.lineTo(x1 - 2.5, maxY - 5); ctx.lineTo(x1 + 2.5, maxY - 5); ctx.closePath(); ctx.fill();
+
+    // Rotated text label
     ctx.font = '10px JetBrains Mono, monospace';
     ctx.save();
-    ctx.translate(x1 + 12, (y1 + y2) / 2);
+    ctx.translate(x1 - 8, midY);
     ctx.rotate(-Math.PI / 2);
-    ctx.fillText(label, -label.length * 3, 0);
+    ctx.textAlign = 'center';
+    ctx.fillText(label, 0, 0);
     ctx.restore();
   } else {
-    const midX = (x1 + x2) / 2;
-    const midY = Math.min(y1, y2) - 5;
+    const minX = Math.min(x1, x2);
+    const maxX = Math.max(x1, x2);
+    const midX = (minX + maxX) / 2;
+
+    // End cross ticks
+    ctx.beginPath();
+    ctx.moveTo(minX, y1 - 4); ctx.lineTo(minX, y1 + 4);
+    ctx.moveTo(maxX, y1 - 4); ctx.lineTo(maxX, y1 + 4);
+    ctx.stroke();
+
+    // Arrowheads
     ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(minX, y1); ctx.lineTo(minX + 5, y1 - 2.5); ctx.lineTo(minX + 5, y1 + 2.5); ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(maxX, y1); ctx.lineTo(maxX - 5, y1 - 2.5); ctx.lineTo(maxX - 5, y1 + 2.5); ctx.closePath(); ctx.fill();
+
+    // Centered label above line
     ctx.font = '10px JetBrains Mono, monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(label, midX, midY);
-    ctx.beginPath(); ctx.moveTo(x1, y1 - 4); ctx.lineTo(x1, y1 + 4); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x2, y2 - 4); ctx.lineTo(x2, y2 + 4); ctx.stroke();
+    ctx.fillText(label, midX, y1 - 4);
   }
+
   ctx.restore();
 }
 
@@ -382,7 +689,6 @@ function drawLabel(ctx: CanvasRenderingContext2D, x: number, y: number, text: st
   ctx.restore();
 }
 
-function easeIn(t: number) { return t * t; }
 function lightenColor(hex: string, amount: number) {
   const cleanHex = hex.replace('#', '');
   const r = Math.min(255, parseInt(cleanHex.slice(0, 2), 16) + amount);
@@ -407,12 +713,12 @@ export default function SimulatorPage() {
   const { addTrial } = useTrialsStore();
 
   // ── State ─────────────────────────────────────────────────────────────────
-  const [h, setH] = useState(0.15);              // release height (m)
-  const [y, setY] = useState(0.60);              // table height (m)
+  const [h, setH] = useState(0.18);              // release height (m)
+  const [y, setY] = useState(0.65);              // table height (m)
   const [mA, setMA] = useState(0.035);           // mass A (kg) - glass default
   const [mB, setMB] = useState(0.065);           // mass B (kg) - steel default
 
-  // Dual Material Selection for Ball A and Ball B
+  // Dual Material Selection for Ball A and Ball B (all 5 materials)
   const [materialA, setMaterialA] = useState('Glass');
   const [materialB, setMaterialB] = useState('Steel');
   const [activeRefBall, setActiveRefBall] = useState<'A' | 'B'>('A');
@@ -435,8 +741,11 @@ export default function SimulatorPage() {
   const colorA = MATERIAL_COLORS[materialA] || '#93C5FD';
   const colorB = MATERIAL_COLORS[materialB] || '#6B7280';
 
-  // Live preview (before release)
+  // Live theoretical preview (before release)
   const livePreview = simulate({ h, y, mA, mB, e, noiseAmplitude: 0 });
+
+  // Active data for calculations: uses simulated result if available, or real-time live preview!
+  const activeSim = result ?? livePreview;
 
   // ── Material query ────────────────────────────────────────────────────────
   const { data: materialsData } = useQuery({
@@ -482,7 +791,7 @@ export default function SimulatorPage() {
 
   // ── Animation loop ────────────────────────────────────────────────────────
   const animate = useCallback((startTime: number, simResult: SimulationResult) => {
-    const DURATION = slowMotion ? 4000 : 2000; // ms
+    const DURATION = slowMotion ? 4000 : 2200; // ms
 
     const frame = (now: number) => {
       const elapsed = now - startTime;
@@ -575,22 +884,82 @@ export default function SimulatorPage() {
     { label: 'Record', desc: 'Click "Record Observation" to save this trial.' },
   ];
 
-  const calcSteps = result ? getCalculationSteps(result, { h, y, mA, mB, e }) : [];
+  // ── Step-by-Step Worked Calculations (ALWAYS LIVE & UP TO DATE) ───────────
+  const workedSteps = [
+    {
+      step: 1,
+      title: 'Velocity of Ball A Before Impact (UA)',
+      symbol: 'UA = √(2 · g · h)',
+      formula: `UA = √(2 × ${G} m/s² × ${h.toFixed(3)} m) = ${activeSim.UA.toFixed(4)} m/s`,
+      resultText: `${activeSim.UA.toFixed(4)} m/s`,
+      note: 'Derived from conservation of mechanical energy along the frictionless ramp',
+    },
+    {
+      step: 2,
+      title: 'Velocity of Ball B Before Impact (UB)',
+      symbol: 'UB = 0 m/s',
+      formula: 'UB = 0.0000 m/s (Stationary at Position 2)',
+      resultText: '0.0000 m/s',
+      note: 'Ball B rests at the lip of the horizontal platform prior to collision',
+    },
+    {
+      step: 3,
+      title: 'Projectile Time of Flight (t)',
+      symbol: 't = √(2y / g)',
+      formula: `t = √(2 × ${y.toFixed(3)} m / ${G} m/s²) = ${activeSim.t.toFixed(4)} s`,
+      resultText: `${activeSim.t.toFixed(4)} s`,
+      note: 'Both balls undergo horizontal projectile motion from table height y',
+    },
+    {
+      step: 4,
+      title: 'Horizontal Landing Range (XA & XB)',
+      symbol: 'X = V · t',
+      formula: `XA = VA × t = ${activeSim.XA.toFixed(4)} m  |  XB = VB × t = ${activeSim.XB.toFixed(4)} m`,
+      resultText: `XA = ${activeSim.XA.toFixed(3)} m,  XB = ${activeSim.XB.toFixed(3)} m`,
+      note: 'Distance measured horizontally along the floor from the plumb line (x = 0)',
+    },
+    {
+      step: 5,
+      title: 'Post-Impact Velocities from Landing Distances (VA & VB)',
+      symbol: 'V = X / t',
+      formula: `VA = ${activeSim.XA.toFixed(4)} / ${activeSim.t.toFixed(4)} = ${activeSim.VA.toFixed(4)} m/s  |  VB = ${activeSim.XB.toFixed(4)} / ${activeSim.t.toFixed(4)} = ${activeSim.VB.toFixed(4)} m/s`,
+      resultText: `VA = ${activeSim.VA.toFixed(4)} m/s,  VB = ${activeSim.VB.toFixed(4)} m/s`,
+      note: 'Back-calculated post-impact horizontal velocities using lab manual method',
+    },
+    {
+      step: 6,
+      title: 'Experimental Coefficient of Restitution (e)',
+      symbol: 'e = -(VA − VB) / (UA − UB) = (VB − VA) / UA',
+      formula: `e = (${activeSim.VB.toFixed(4)} − ${activeSim.VA.toFixed(4)}) / ${activeSim.UA.toFixed(4)} = ${activeSim.e_calc.toFixed(4)}`,
+      resultText: `e = ${activeSim.e_calc.toFixed(4)} (Pair Ref: ${e.toFixed(3)})`,
+      note: `Newton's Law of Restitution for direct central impact (${materialA} ➔ ${materialB})`,
+    },
+    {
+      step: 7,
+      title: 'Conservation of Linear Momentum Check',
+      symbol: 'mA · UA + mB · UB = mA · VA + mB · VB',
+      formula: `p_before = ${(mA * activeSim.UA).toFixed(5)} kg·m/s  |  p_after = ${(mA * activeSim.VA + mB * activeSim.VB).toFixed(5)} kg·m/s`,
+      resultText: `Δp = ${Math.abs(activeSim.p_after - activeSim.p_before).toFixed(6)} kg·m/s`,
+      note: 'Total linear momentum is strictly conserved along the line of impact',
+    },
+  ];
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 page-enter">
       {/* Header */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <span className="badge badge-warning mb-2">Simulator</span>
-          <h1 className="font-heading text-3xl sm:text-4xl gradient-text">Physics Simulator</h1>
+          <span className="badge badge-warning mb-2">Experiment 05</span>
+          <h1 className="font-heading text-3xl sm:text-4xl gradient-text">
+            Collision of Elastic Bodies
+          </h1>
           <p className="text-text-secondary text-sm mt-1">
-            Direct Central Impact · Coefficient of Restitution
+            Impact Apparatus Simulator · Direct Central Impact · St. John College of Engineering and Management
           </p>
         </div>
 
         {/* Live Material Pair Pill */}
-        <div className="flex items-center gap-2 bg-surface-2 border border-border px-3.5 py-2 rounded-xl text-xs font-mono self-start sm:self-auto">
+        <div className="flex items-center gap-2 bg-surface-2 border border-border px-3.5 py-2 rounded-xl text-xs font-mono self-start sm:self-auto shadow-sm">
           <span className="w-2.5 h-2.5 rounded-full" style={{ background: colorA }} />
           <span className="text-text-primary font-bold">Ball A: {materialA}</span>
           <span className="text-text-muted">➔</span>
@@ -602,16 +971,16 @@ export default function SimulatorPage() {
 
       <div className="grid lg:grid-cols-[1fr_380px] gap-6 items-start">
 
-        {/* ── Left Column: Canvas Figure + Parameters ─────────────────── */}
-        <div className="space-y-4">
+        {/* ── Left Column: Canvas Figure + Calculations + Parameters ── */}
+        <div className="space-y-5">
 
           {/* Canvas Figure Card */}
           <div className="glass-card p-4 sm:p-5">
-            {/* Top Bar above/beside figure with status and quick side-by-side action buttons */}
+            {/* Top Bar directly above/beside the figure */}
             <div className="flex flex-wrap items-center justify-between gap-3 mb-3 pb-3 border-b border-border/40">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono font-semibold uppercase tracking-wider text-text-muted">
-                  Simulation Figure
+                  Impact Apparatus Figure
                 </span>
                 <span className={`badge ${isAnimating ? 'badge-warning' : result ? 'badge-success' : 'badge-primary'}`}>
                   {isAnimating ? '⏳ Simulating…' : result ? '✓ Collision Complete' : '● Ready at Position 1'}
@@ -650,8 +1019,8 @@ export default function SimulatorPage() {
               </div>
             </div>
 
-            {/* Canvas */}
-            <div className="simulator-canvas-wrapper" style={{ height: '380px' }}>
+            {/* Canvas (460px Height for Realistic Ramp Incline & Coordinate Visibility) */}
+            <div className="simulator-canvas-wrapper" style={{ height: '460px' }}>
               <canvas
                 ref={canvasRef}
                 style={{ width: '100%', height: '100%', display: 'block' }}
@@ -661,13 +1030,80 @@ export default function SimulatorPage() {
 
               {/* Status overlay */}
               {!isAnimating && animProgress === 0 && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <p className="text-text-muted text-xs font-mono bg-surface-1/80 px-3 py-1.5 rounded-full border border-border animate-pulse-slow">
-                    ↑ Click Release beside the diagram to launch Ball A
+                <div className="absolute inset-0 flex items-end justify-center pb-12 pointer-events-none">
+                  <p className="text-text-muted text-xs font-mono bg-surface-1/90 px-4 py-1.5 rounded-full border border-primary/30 shadow-lg animate-pulse-slow">
+                    👉 Click <strong className="text-primary font-bold">Release</strong> beside the diagram to launch Ball A
                   </p>
                 </div>
               )}
             </div>
+          </div>
+
+          {/* ── STEP-BY-STEP WORKED CALCULATION PANEL (ALWAYS VISIBLE & LIVE) ─ */}
+          <div className="glass-card p-5 border border-primary/20 shadow-md">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4 pb-2 border-b border-border/50">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl">🔢</span>
+                <div>
+                  <h3 className="font-heading text-lg text-text-primary font-bold">
+                    Step-by-Step Worked Calculation
+                  </h3>
+                  <p className="text-xs text-text-muted">
+                    Full lab derivation matching St. John College of Engineering & Management Lab Manual
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span
+                  className={`badge ${
+                    result ? 'badge-success' : 'badge-warning'
+                  } text-[10px] font-mono`}
+                >
+                  {result ? '✓ Trial Data (Simulated)' : '● Live Theoretical Preview'}
+                </span>
+                <button
+                  className="btn btn-ghost btn-sm text-xs py-1 px-2 border border-border"
+                  onClick={() => setShowCalcPanel(!showCalcPanel)}
+                  aria-label="Toggle calculation panel"
+                >
+                  {showCalcPanel ? '▲ Collapse' : '▼ Expand'}
+                </button>
+              </div>
+            </div>
+
+            {showCalcPanel && (
+              <div className="space-y-3">
+                {workedSteps.map((s) => (
+                  <div
+                    key={s.step}
+                    className="p-3 rounded-xl bg-surface-2/60 border border-border hover:border-primary/30 transition-colors"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-primary/20 text-primary font-mono font-bold text-xs flex items-center justify-center">
+                          {s.step}
+                        </span>
+                        <span className="font-semibold text-xs text-text-primary">
+                          {s.title}
+                        </span>
+                      </div>
+                      <span className="font-mono text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">
+                        {s.resultText}
+                      </span>
+                    </div>
+
+                    <div className="font-mono text-xs text-text-secondary pl-7 mb-1 bg-surface-1/40 p-1.5 rounded border border-border/40">
+                      {s.formula}
+                    </div>
+
+                    <p className="text-[11px] text-text-muted pl-7 italic">
+                      ↳ {s.note}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Controls Row 1: Sliders */}
@@ -680,8 +1116,8 @@ export default function SimulatorPage() {
                 <div className="flex justify-between mb-1">
                   <label className="text-sm text-text-secondary" htmlFor="slider-h">
                     <span className="tooltip-wrapper">
-                      h (Release Height)
-                      <span className="tooltip">Height from which ball A is released on the ramp</span>
+                      h (Release Height on Ramp)
+                      <span className="tooltip">Vertical height of Ball A release position above Position 2</span>
                     </span>
                   </label>
                   <span className="font-mono text-primary text-sm font-bold">{h.toFixed(3)} m</span>
@@ -704,11 +1140,11 @@ export default function SimulatorPage() {
                 <div className="flex justify-between mb-1">
                   <label className="text-sm text-text-secondary" htmlFor="slider-y">
                     <span className="tooltip-wrapper">
-                      y (Table Height)
-                      <span className="tooltip">Height of the table above the ground</span>
+                      y (Table Height Above Ground)
+                      <span className="tooltip">Height of the platform above the floor</span>
                     </span>
                   </label>
-                  <span className="font-mono text-primary text-sm font-bold">{y.toFixed(3)} m</span>
+                  <span className="font-mono text-primary text-sm font-bold">{y.toFixed(2)} m</span>
                 </div>
                 <input
                   id="slider-y"
@@ -719,7 +1155,7 @@ export default function SimulatorPage() {
                   aria-label="Table height y"
                 />
                 <div className="flex justify-between text-text-muted text-xs mt-1">
-                  <span>0.3 m</span><span>1.0 m</span>
+                  <span>0.30 m</span><span>1.00 m</span>
                 </div>
               </div>
 
@@ -956,7 +1392,7 @@ export default function SimulatorPage() {
                 className="btn btn-secondary py-3 flex items-center justify-center gap-2 font-bold text-base hover:border-amber-500/50 hover:scale-[1.02] active:scale-[0.98] transition-all"
                 onClick={handleReset}
                 id="btn-reset"
-                aria-label="Reset simulation"
+                aria-label="Restart simulation"
               >
                 <span>🔄</span>
                 <span>Restart</span>
@@ -1140,39 +1576,6 @@ export default function SimulatorPage() {
                 : 'Run simulation to check momentum conservation'
               }
             </div>
-          </div>
-
-          {/* Calculation Panel */}
-          <div className="glass-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-heading text-lg text-text-primary">🔢 Worked Calculation</h3>
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={() => setShowCalcPanel(!showCalcPanel)}
-                aria-label="Toggle calculation panel"
-              >
-                {showCalcPanel ? '▲ Hide' : '▼ Show'}
-              </button>
-            </div>
-
-            {showCalcPanel && (
-              <div>
-                {calcSteps.length > 0 ? (
-                  <div>
-                    {calcSteps.map((step, i) => (
-                      <div key={i} className="calc-step">
-                        <span className="calc-label">Step {i + 1}</span>
-                        <span className="calc-formula flex-1 font-mono text-xs">{step}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-text-muted text-sm text-center py-4">
-                    Run a simulation to see step-by-step calculations
-                  </p>
-                )}
-              </div>
-            )}
           </div>
 
           {/* Energy Analysis */}
