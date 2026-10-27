@@ -12,10 +12,7 @@ import { useAuthStore } from '../stores/authStore';
 import { calculateMeanE, calculatePercentError } from '../utils/physics';
 
 const MATERIAL_REFERENCE_E: Record<string, number> = {
-  'Glass - Steel': 0.925,
-  'Glass': 0.95,
-  'Steel': 0.90,
-  'Steel - Glass': 0.925,
+  Steel: 0.90, Glass: 0.95, Wood: 0.50, Rubber: 0.75, Clay: 0.05,
 };
 
 const SOURCES_OF_ERROR = [
@@ -43,7 +40,7 @@ export default function ReportPage() {
   const navigate = useNavigate();
 
   const [conclusion, setConclusion] = useState('');
-  const [selectedMaterial, setSelectedMaterial] = useState('Glass - Steel');
+  const [selectedMaterial, setSelectedMaterial] = useState('Steel');
   const [savedReportId, setSavedReportId] = useState<string | null>(null);
 
   const meanE = calculateMeanE(trials.map((t) => t.e));
