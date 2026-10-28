@@ -89,33 +89,43 @@ function drawSimulator(
   }
 
   // ── Layout Geometry (matching the lab manual image) ────────────────────────
-  const MARGIN_LEFT = 45;
-  const MARGIN_RIGHT = 35;
+  const MARGIN_LEFT = Math.max(20, Math.min(36, Math.round(W * 0.07)));
+  const MARGIN_RIGHT = Math.max(20, Math.min(32, Math.round(W * 0.06)));
   const GROUND_Y = H - 55;
 
   // Position 2 (horizontal platform exit edge where Ball B rests)
-  const TABLE_X = Math.round(W * 0.40);
+  // Ensures sufficient horizontal run for both the ramp apparatus and the projectile flight
+  const minTableX = Math.round(W * 0.38);
+  const TABLE_X = Math.max(160, Math.min(minTableX, W - 145));
 
   // Table elevation scaled proportionally from y (0.30 m - 1.00 m)
   const normY = Math.max(0, Math.min(1, (params.y - 0.30) / (1.00 - 0.30)));
   const minTableH = H * 0.28;
-  const maxTableH = H * 0.50;
+  const maxTableH = H * 0.48;
   const tableHeightPx = minTableH + normY * (maxTableH - minTableH);
   const TABLE_Y = GROUND_Y - tableHeightPx;
 
   // Release height scaled from h (0.05 m - 0.50 m)
   const normH = Math.max(0, Math.min(1, (params.h - 0.05) / (0.50 - 0.05)));
-  const maxRampPx = Math.min(TABLE_Y - 45, H * 0.38);
+  const maxRampPx = Math.min(TABLE_Y - 45, H * 0.40);
   const rampHeightPx = 35 + normH * (maxRampPx - 35);
   const Y_RELEASE = TABLE_Y - rampHeightPx;
 
   // Incline & fillet curve geometry:
-  // As shown in the manual: A long straight slope down at ~32 degrees,
-  // transitioning through a smooth circular curve to a short horizontal flat section!
-  const HORIZ_LEN = 44;
+  // Smooth circular transition to a short horizontal flat section
+  const HORIZ_LEN = Math.max(26, Math.min(42, (TABLE_X - MARGIN_LEFT) * 0.20));
   const KNEE_X = TABLE_X - HORIZ_LEN;
-  const R_CURVE = 64;
-  const THETA = (32 * Math.PI) / 180; // 32 degree straight incline
+  const R_CURVE = Math.max(38, Math.min(65, (TABLE_X - MARGIN_LEFT) * 0.34));
+
+  // Top of ramp structure
+  const Y_TOP = Math.max(26, TABLE_Y - maxRampPx - 20);
+
+  // Incline angle dynamically computed to fit available canvas width smoothly without clamping
+  const availRun = Math.max(50, KNEE_X - MARGIN_LEFT - 14);
+  const totalRise = TABLE_Y - Y_TOP;
+  let THETA = Math.atan2(totalRise, availRun);
+  THETA = Math.min((68 * Math.PI) / 180, Math.max((32 * Math.PI) / 180, THETA));
+
   const cosT = Math.cos(THETA);
   const sinT = Math.sin(THETA);
   const tanT = Math.tan(THETA);
@@ -128,12 +138,8 @@ function drawSimulator(
   const x_tan = XC - R_CURVE * sinT;
   const y_tan = YC + R_CURVE * cosT;
 
-  // Top of ramp structure
-  const Y_TOP = Math.max(28, TABLE_Y - maxRampPx - 25);
-  let x_top = x_tan - (y_tan - Y_TOP) / tanT;
-  if (x_top < MARGIN_LEFT) {
-    x_top = MARGIN_LEFT;
-  }
+  // Top of ramp structure along the exact tangent line
+  const x_top = x_tan - (y_tan - Y_TOP) / tanT;
 
   // ── 1. IMPACT APPARATUS Header ─────────────────────────────────────────────
   ctx.save();
@@ -347,7 +353,7 @@ function drawSimulator(
 
   // ── 8. Dimension Lines: h and y ────────────────────────────────────────────
   // Dimension h (vertical height between Position 1 and Position 2 level)
-  const h_dim_x = Math.max(18, x_pos1 - 28);
+  const h_dim_x = Math.max(10, Math.min(x_pos1 - 22, x_top - 16));
   ctx.strokeStyle = '#475569';
   ctx.lineWidth = 1;
   ctx.setLineDash([3, 3]);
