@@ -493,34 +493,36 @@ export default function SimulatorPage() {
         {/* ── Left: Canvas + Controls ──────────────────────────────────── */}
         <div className="space-y-4">
 
-          {/* Canvas + side buttons */}
-          <div className="flex gap-3 items-stretch">
-            <div className="simulator-canvas-wrapper flex-1" style={{ height: '360px' }}>
-              <canvas
-                ref={canvasRef}
-                style={{ width: '100%', height: '100%', display: 'block' }}
-                aria-label="Collision simulation canvas"
-                role="img"
-              />
+          {/* Canvas with buttons overlaid on the right side of the diagram */}
+          <div className="simulator-canvas-wrapper" style={{ height: '360px' }}>
+            <canvas
+              ref={canvasRef}
+              style={{ width: '100%', height: '100%', display: 'block' }}
+              aria-label="Collision simulation canvas"
+              role="img"
+            />
 
-              {/* Status overlay */}
-              {!isAnimating && animProgress === 0 && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <p className="text-text-muted text-sm font-mono animate-pulse-slow">
-                    ↑ Set parameters and click Release
-                  </p>
-                </div>
-              )}
-            </div>
+            {/* Status overlay */}
+            {!isAnimating && animProgress === 0 && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <p className="text-text-muted text-sm font-mono animate-pulse-slow">
+                  ↑ Set parameters and click Release
+                </p>
+              </div>
+            )}
 
-            {/* Side action buttons */}
-            <div className="flex flex-col gap-2 justify-center" style={{ minWidth: '110px' }}>
+            {/* Release & Reset buttons — pinned to right side of diagram */}
+            <div
+              className="absolute flex flex-col gap-2"
+              style={{ top: '50%', right: '10px', transform: 'translateY(-50%)' }}
+            >
               <button
                 className="btn btn-primary"
                 onClick={handleRelease}
                 disabled={isAnimating}
                 id="btn-release"
                 aria-label="Release ball A"
+                style={{ minWidth: '100px' }}
               >
                 {isAnimating ? '⏳ Running…' : '🚀 Release'}
               </button>
@@ -529,6 +531,7 @@ export default function SimulatorPage() {
                 onClick={handleReset}
                 id="btn-reset"
                 aria-label="Reset simulation"
+                style={{ minWidth: '100px' }}
               >
                 🔄 Reset
               </button>
