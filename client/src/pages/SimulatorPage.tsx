@@ -89,51 +89,66 @@ function drawSimulator(
   }
 
   // ── Layout Geometry (matching the lab manual image) ────────────────────────
+  // The manual shows: long HORIZONTAL track at bottom-left (Position 1),
+  // sweeping up through a large quarter-circle, ending with a short near-vertical
+  // rise at Position 2 (top of the stand). Like a J-curve / quarter-pipe.
   const MARGIN_LEFT = 45;
   const MARGIN_RIGHT = 35;
   const GROUND_Y = H - 55;
 
-  // Position 2 (horizontal platform exit edge where Ball B rests)
-  const TABLE_X = Math.round(W * 0.40);
+  // Position 2 is at the TOP of the stand — Ball B rests here
+  const TABLE_X = Math.round(W * 0.42);
 
   // Table elevation scaled proportionally from y (0.30 m - 1.00 m)
   const normY = Math.max(0, Math.min(1, (params.y - 0.30) / (1.00 - 0.30)));
-  const minTableH = H * 0.28;
-  const maxTableH = H * 0.50;
+  const minTableH = H * 0.30;
+  const maxTableH = H * 0.52;
   const tableHeightPx = minTableH + normY * (maxTableH - minTableH);
   const TABLE_Y = GROUND_Y - tableHeightPx;
 
-  // Release height scaled from h (0.05 m - 0.50 m)
+  // Release height: height of Position 1 above the ground-level of the ramp base
+  // h controls how far along the horizontal arm Position 1 is
   const normH = Math.max(0, Math.min(1, (params.h - 0.05) / (0.50 - 0.05)));
-  const maxRampPx = Math.min(TABLE_Y - 45, H * 0.38);
-  const rampHeightPx = 35 + normH * (maxRampPx - 35);
-  const Y_RELEASE = TABLE_Y - rampHeightPx;
 
-  // Incline & fillet curve geometry:
-  // As shown in the manual: A long straight slope down at ~32 degrees,
-  // transitioning through a smooth circular curve to a short horizontal flat section!
-  const HORIZ_LEN = 44;
-  const KNEE_X = TABLE_X - HORIZ_LEN;
-  const R_CURVE = 64;
-  const THETA = (32 * Math.PI) / 180; // 32 degree straight incline
-  const cosT = Math.cos(THETA);
-  const sinT = Math.sin(THETA);
-  const tanT = Math.tan(THETA);
+  // ── J-Curve Geometry ──────────────────────────────────────────────────────
+  // The quarter-circle arc center sits at the bottom-right corner of the curve.
+  // Arc starts going horizontally (left) and ends going upward (at Position 2 column).
+  //
+  //   TABLE_X (Position 2 column)
+  //       │
+  //  ─────┘  ← quarter-circle arc
+  //  (horizontal arm extends left to Position 1)
+  //
+  const R_CURVE = Math.round(tableHeightPx * 0.52); // arc radius proportional to table height
 
-  // Center of fillet transition arc (located ABOVE the track since it's concave up)
-  const XC = KNEE_X;
-  const YC = TABLE_Y - R_CURVE;
+  // Arc center: to the left of TABLE_X, at the level where the horizontal arm sits
+  // The arc goes from angle=0 (pointing right, i.e. 3 o'clock) sweeping CCW to angle=π/2 (pointing up)
+  // In canvas coords (Y increases downward):
+  //   - Arc center at (XC, YC)
+  //   - Horizontal tangent point: (XC + R_CURVE, YC)  — this is where horizontal arm meets arc
+  //   - Vertical tangent point:   (XC, YC - R_CURVE)  — this is where arc meets the vertical rise
+  const XC = TABLE_X - R_CURVE;  // arc center x
+  const YC = TABLE_Y + R_CURVE;  // arc center y (below TABLE_Y)
 
-  // Tangent point on incline
-  const x_tan = XC - R_CURVE * sinT;
-  const y_tan = YC + R_CURVE * cosT;
+  // Top of vertical rise = TABLE_Y (Position 2 level)
+  // Bottom of horizontal arm = YC (same as arc center y)
+  const ARM_Y = YC;   // y-coordinate of the horizontal arm
 
-  // Top of ramp structure
-  const Y_TOP = Math.max(28, TABLE_Y - maxRampPx - 25);
-  let x_top = x_tan - (y_tan - Y_TOP) / tanT;
-  if (x_top < MARGIN_LEFT) {
-    x_top = MARGIN_LEFT;
-  }
+  // Horizontal arm extends from MARGIN_LEFT to XC
+  // Position 1 is along this arm; its x is controlled by h (further left = higher h)
+  const maxArmLen = XC - MARGIN_LEFT - 10;
+  const pos1OffsetFromRight = normH * maxArmLen * 0.85 + maxArmLen * 0.10;
+  const X_POS1 = XC - pos1OffsetFromRight;
+  const Y_RELEASE = ARM_Y;  // arm is horizontal
+
+  // For compatibility aliases used by later sections
+  const HORIZ_LEN = 0; // not used in J-curve, kept for no-op references
+  const KNEE_X = XC;   // where horizontal arm meets the arc
+  const THETA = 0;     // horizontal arm — angle from horizontal = 0
+  const cosT = 1; const sinT = 0; const tanT = 0;
+  const x_tan = XC; const y_tan = ARM_Y;
+  const Y_TOP = TABLE_Y;  // top of the vertical rise
+  const x_top = TABLE_X; // x of vertical rise
 
   // ── 1. IMPACT APPARATUS Header ─────────────────────────────────────────────
   ctx.save();
@@ -149,9 +164,9 @@ function drawSimulator(
   ctx.restore();
 
   // ── 2. Apparatus Table & Support Stand ──────────────────────────────────────
-  // Main vertical column under Position 2
+  // Main vertical column: from TABLE_Y down to GROUND_Y, at TABLE_X
   const colWidth = 14;
-  const colLeft = TABLE_X - colWidth;
+  const colLeft = TABLE_X - colWidth / 2;
   const standGrad = ctx.createLinearGradient(colLeft, 0, colLeft + colWidth, 0);
   standGrad.addColorStop(0, '#334155');
   standGrad.addColorStop(0.4, '#475569');
@@ -163,52 +178,62 @@ function drawSimulator(
   ctx.lineWidth = 1;
   ctx.strokeRect(colLeft, TABLE_Y, colWidth, GROUND_Y - TABLE_Y);
 
-  // Base foot on the ground with leveling screws
+  // Base foot on the ground
   const footWidth = 46;
-  const footLeft = TABLE_X - footWidth / 2 - 2;
+  const footLeft = TABLE_X - footWidth / 2;
   ctx.fillStyle = '#1E293B';
   ctx.fillRect(footLeft, GROUND_Y - 5, footWidth, 5);
   ctx.strokeStyle = '#64748B';
   ctx.strokeRect(footLeft, GROUND_Y - 5, footWidth, 5);
 
-  // Diagonal support strut under curved knee
+  // Small platform cap at top of column (Position 2 lip)
+  ctx.fillStyle = '#475569';
+  ctx.fillRect(colLeft - 4, TABLE_Y - 5, colWidth + 8, 5);
+
+  // Left support leg under horizontal arm (a thin vertical strut near MARGIN_LEFT)
+  const legX = MARGIN_LEFT + 12;
   ctx.strokeStyle = '#334155';
   ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.moveTo(KNEE_X - 8, TABLE_Y + 4);
-  ctx.lineTo(colLeft, TABLE_Y + (GROUND_Y - TABLE_Y) * 0.45);
+  ctx.moveTo(legX, ARM_Y);
+  ctx.lineTo(legX, GROUND_Y);
   ctx.stroke();
+  // Foot for left leg
+  ctx.fillStyle = '#1E293B';
+  ctx.fillRect(legX - 10, GROUND_Y - 5, 22, 5);
+  ctx.strokeStyle = '#64748B';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(legX - 10, GROUND_Y - 5, 22, 5);
 
-  // Table top mounting plate
-  ctx.fillStyle = '#475569';
-  ctx.fillRect(KNEE_X - 14, TABLE_Y, HORIZ_LEN + 16, 5);
+  // ── 3. Ramp Guide Rails (J-Curve: horizontal arm → quarter-circle → vertical rise) ──
+  // Arc center = (XC, TABLE_Y). Arm meets arc at angle π/2 (6 o'clock = ARM_Y).
+  // Arc ends at angle 0 (3 o'clock = TABLE_X, TABLE_Y). anticlockwise=false → J-shape.
 
-  // ── 3. Ramp Guide Rails (Double-Rail Channel as in Manual) ─────────────────
   const BALL_R = 10;
   const RAIL_OFFSET = 6;
+  const ARM_LEFT = MARGIN_LEFT + 16;
 
-  // Lower rail (depth shadow / secondary channel)
   ctx.save();
+
+
+  // Lower (shadow) rail
   ctx.strokeStyle = '#78350F';
   ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.moveTo(x_top - RAIL_OFFSET * sinT, Y_TOP + RAIL_OFFSET * cosT);
-  ctx.lineTo(x_tan - RAIL_OFFSET * sinT, y_tan + RAIL_OFFSET * cosT);
-  ctx.arc(XC, YC, R_CURVE + RAIL_OFFSET, Math.PI / 2 + THETA, Math.PI / 2, true);
-  ctx.lineTo(TABLE_X, TABLE_Y + RAIL_OFFSET);
+  ctx.moveTo(ARM_LEFT, ARM_Y + RAIL_OFFSET);
+  ctx.lineTo(XC, ARM_Y + RAIL_OFFSET);
+  ctx.arc(XC, TABLE_Y, R_CURVE + RAIL_OFFSET, Math.PI / 2, 0, true);
   ctx.stroke();
 
-  // Cross-struts connecting rails (track ties)
+  // Cross-struts on horizontal arm section
   ctx.strokeStyle = '#92400E';
   ctx.lineWidth = 1.2;
-  const numTies = 11;
+  const numTies = 10;
   for (let i = 0; i <= numTies; i++) {
-    const tFrac = i / numTies;
-    const tieX = x_top + tFrac * (x_tan - x_top);
-    const tieY = Y_TOP + tFrac * (y_tan - Y_TOP);
+    const tieX = ARM_LEFT + (i / numTies) * (XC - ARM_LEFT);
     ctx.beginPath();
-    ctx.moveTo(tieX, tieY);
-    ctx.lineTo(tieX - RAIL_OFFSET * sinT, tieY + RAIL_OFFSET * cosT);
+    ctx.moveTo(tieX, ARM_Y);
+    ctx.lineTo(tieX, ARM_Y + RAIL_OFFSET);
     ctx.stroke();
   }
 
@@ -218,10 +243,9 @@ function drawSimulator(
   ctx.shadowColor = 'rgba(245, 158, 11, 0.45)';
   ctx.shadowBlur = 8;
   ctx.beginPath();
-  ctx.moveTo(x_top, Y_TOP);
-  ctx.lineTo(x_tan, y_tan);
-  ctx.arc(XC, YC, R_CURVE, Math.PI / 2 + THETA, Math.PI / 2, true);
-  ctx.lineTo(TABLE_X, TABLE_Y);
+  ctx.moveTo(ARM_LEFT, ARM_Y);
+  ctx.lineTo(XC, ARM_Y);
+  ctx.arc(XC, TABLE_Y, R_CURVE, Math.PI / 2, 0, true);
   ctx.stroke();
 
   // Rail highlight
@@ -229,39 +253,37 @@ function drawSimulator(
   ctx.strokeStyle = '#FEF08A';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(x_top, Y_TOP);
-  ctx.lineTo(x_tan, y_tan);
-  ctx.arc(XC, YC, R_CURVE, Math.PI / 2 + THETA, Math.PI / 2, true);
-  ctx.lineTo(TABLE_X, TABLE_Y);
+  ctx.moveTo(ARM_LEFT, ARM_Y);
+  ctx.lineTo(XC, ARM_Y);
+  ctx.arc(XC, TABLE_Y, R_CURVE, Math.PI / 2, 0, true);
   ctx.stroke();
   ctx.restore();
 
-  // ── 4. Position 1 (Release Point on Incline) ────────────────────────────────
-  // Located on the straight incline at vertical height Y_RELEASE
-  const x_pos1 = x_tan - (y_tan - Y_RELEASE) / tanT;
-  const y_pos1 = Y_RELEASE;
+  // ── 4. Position 1 (Release Point on horizontal arm) ─────────────────────────
+  // Ball A rests ON TOP of the horizontal arm at X_POS1
+  const x_pos1 = X_POS1;
+  const y_pos1 = ARM_Y;
 
-  // Ball A rests ON TOP of the straight incline track:
-  // Normal vector pointing outward/upward from track: (+sinT, -cosT)
-  const xA_rest = x_pos1 + BALL_R * sinT;
-  const yA_rest = y_pos1 - BALL_R * cosT;
+  // Ball sits on top of the arm (arm is horizontal, so normal is straight up)
+  const xA_rest = x_pos1;
+  const yA_rest = ARM_Y - BALL_R;
 
-  // Release stopper pin at Position 1 (holding Ball A)
+  // Release stopper pin at Position 1 (small vertical pin above arm)
   ctx.save();
   ctx.strokeStyle = '#E2E8F0';
   ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.moveTo(x_pos1, y_pos1);
-  ctx.lineTo(x_pos1 + 12 * sinT, y_pos1 - 12 * cosT);
+  ctx.moveTo(x_pos1, ARM_Y);
+  ctx.lineTo(x_pos1, ARM_Y - 14);
   ctx.stroke();
   ctx.fillStyle = '#CBD5E1';
   ctx.beginPath();
-  ctx.arc(x_pos1 + 12 * sinT, y_pos1 - 12 * cosT, 3, 0, Math.PI * 2);
+  ctx.arc(x_pos1, ARM_Y - 14, 3, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
-  // ── 5. Position 2 (Exit Point on Horizontal Platform) ──────────────────────
-  // Ball B rests on the horizontal track lip at Position 2 with center over plumb line
+  // ── 5. Position 2 (Exit Point at top of vertical rise) ───────────────────────
+  // Ball B rests on the platform lip at the top of the vertical rise
   const xB_rest = TABLE_X;
   const yB_rest = TABLE_Y - BALL_R;
 
@@ -346,26 +368,30 @@ function drawSimulator(
   ctx.restore();
 
   // ── 8. Dimension Lines: h and y ────────────────────────────────────────────
-  // Dimension h (vertical height between Position 1 and Position 2 level)
-  const h_dim_x = Math.max(18, x_pos1 - 28);
+  // Dimension h: vertical height from Ball A level (ARM_Y) to Position 2 level (TABLE_Y)
+  // This is the effective drop height = R_CURVE (quarter-circle radius)
+  // Draw vertical dimension to the left of Position 1
+  const h_dim_x = Math.max(18, X_POS1 - 22);
   ctx.strokeStyle = '#475569';
   ctx.lineWidth = 1;
   ctx.setLineDash([3, 3]);
   ctx.beginPath();
-  ctx.moveTo(h_dim_x - 4, yA_rest);
-  ctx.lineTo(xA_rest, yA_rest);
-  ctx.moveTo(h_dim_x - 4, TABLE_Y - BALL_R);
-  ctx.lineTo(TABLE_X, TABLE_Y - BALL_R);
+  // Horizontal tick line at Ball A level (ARM_Y)
+  ctx.moveTo(h_dim_x - 4, ARM_Y);
+  ctx.lineTo(X_POS1 + BALL_R, ARM_Y);
+  // Horizontal tick line at Position 2 level (TABLE_Y)
+  ctx.moveTo(h_dim_x - 4, TABLE_Y);
+  ctx.lineTo(TABLE_X, TABLE_Y);
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Vertical dimension line for h
+  // Vertical dimension line for h (from arm level to table top)
   drawDimensionLine(
     ctx,
     h_dim_x,
-    yA_rest,
+    ARM_Y,
     h_dim_x,
-    TABLE_Y - BALL_R,
+    TABLE_Y,
     '#38BDF8',
     `h = ${params.h.toFixed(3)} m`,
     true
@@ -413,36 +439,33 @@ function drawSimulator(
   ctx.fillText(`BALL B (${params.materialB})`, xB_rest, yB_rest - BALL_R - 4);
   ctx.restore();
 
-  // ── 10. Animation: Rolling along Curve, Collision & Projectile Flight ──────
+  // ── 10. Animation: Rolling along J-Curve, Collision & Projectile Flight ─────
+  // Track segments:
+  //   L1: horizontal arm from X_POS1 → XC   (length = XC - X_POS1)
+  //   L2: quarter-circle arc from angle π/2 → 0, radius R_EFF = R_CURVE - BALL_R
+  //   (no L3: arc ends right at Position 2)
   const R_EFF = R_CURVE - BALL_R;
-  const L1 = (y_tan - y_pos1) / sinT;
-  const L2 = R_EFF * THETA;
-  const L3 = Math.max(0, (TABLE_X - 2 * BALL_R) - KNEE_X);
-  const S_TOTAL = L1 + L2 + L3;
+  const L1 = XC - X_POS1;             // horizontal arm length
+  const L2 = R_EFF * (Math.PI / 2);   // quarter-circle arc length
+  const S_TOTAL = L1 + L2;
 
   function getBallAPosAlongTrack(s: number): { x: number; y: number } {
     if (s <= L1) {
-      // On straight incline
-      const xt = x_pos1 + s * cosT;
-      const yt = y_pos1 + s * sinT;
+      // On horizontal arm: moving rightward
       return {
-        x: xt + BALL_R * sinT,
-        y: yt - BALL_R * cosT,
-      };
-    } else if (s <= L1 + L2) {
-      // On fillet arc (riding smoothly on top of the concave arc)
-      const sArc = s - L1;
-      const phi = THETA - sArc / R_EFF;
-      return {
-        x: XC - R_EFF * Math.sin(phi),
-        y: YC + R_EFF * Math.cos(phi),
+        x: X_POS1 + s,
+        y: ARM_Y - BALL_R,  // sitting on top of the arm
       };
     } else {
-      // On horizontal flat track
-      const sFlat = s - (L1 + L2);
+      // On quarter-circle arc: angle goes from π/2 (bottom) to 0 (right = top)
+      // Ball rides on INSIDE of the arc (concave side), so offset is inward (+BALL_R toward center)
+      const sArc = s - L1;
+      const phi = Math.PI / 2 - sArc / R_EFF; // starts at π/2, goes to 0
+      // Point on arc rail: (XC + R_CURVE*cos(phi), TABLE_Y + R_CURVE*sin(phi))
+      // Ball center is R_EFF = R_CURVE - BALL_R from center
       return {
-        x: KNEE_X + sFlat,
-        y: TABLE_Y - BALL_R,
+        x: XC + R_EFF * Math.cos(phi),
+        y: TABLE_Y + R_EFF * Math.sin(phi),
       };
     }
   }
