@@ -493,23 +493,46 @@ export default function SimulatorPage() {
         {/* ── Left: Canvas + Controls ──────────────────────────────────── */}
         <div className="space-y-4">
 
-          {/* Canvas */}
-          <div className="simulator-canvas-wrapper" style={{ height: '360px' }}>
-            <canvas
-              ref={canvasRef}
-              style={{ width: '100%', height: '100%', display: 'block' }}
-              aria-label="Collision simulation canvas"
-              role="img"
-            />
+          {/* Canvas + side buttons */}
+          <div className="flex gap-3 items-stretch">
+            <div className="simulator-canvas-wrapper flex-1" style={{ height: '360px' }}>
+              <canvas
+                ref={canvasRef}
+                style={{ width: '100%', height: '100%', display: 'block' }}
+                aria-label="Collision simulation canvas"
+                role="img"
+              />
 
-            {/* Status overlay */}
-            {!isAnimating && animProgress === 0 && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <p className="text-text-muted text-sm font-mono animate-pulse-slow">
-                  ↑ Set parameters and click Release
-                </p>
-              </div>
-            )}
+              {/* Status overlay */}
+              {!isAnimating && animProgress === 0 && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <p className="text-text-muted text-sm font-mono animate-pulse-slow">
+                    ↑ Set parameters and click Release
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Side action buttons */}
+            <div className="flex flex-col gap-2 justify-center" style={{ minWidth: '110px' }}>
+              <button
+                className="btn btn-primary"
+                onClick={handleRelease}
+                disabled={isAnimating}
+                id="btn-release"
+                aria-label="Release ball A"
+              >
+                {isAnimating ? '⏳ Running…' : '🚀 Release'}
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={handleReset}
+                id="btn-reset"
+                aria-label="Reset simulation"
+              >
+                🔄 Reset
+              </button>
+            </div>
           </div>
 
           {/* Controls Row 1: Sliders */}
@@ -681,23 +704,6 @@ export default function SimulatorPage() {
 
               {/* Action Buttons */}
               <div className="flex flex-col gap-2 justify-end">
-                <button
-                  className="btn btn-primary"
-                  onClick={handleRelease}
-                  disabled={isAnimating}
-                  id="btn-release"
-                  aria-label="Release ball A"
-                >
-                  {isAnimating ? '⏳ Running…' : '🚀 Release'}
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={handleReset}
-                  id="btn-reset"
-                  aria-label="Reset simulation"
-                >
-                  🔄 Reset
-                </button>
                 <button
                   className="btn btn-primary"
                   onClick={handleRecord}
