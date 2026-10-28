@@ -976,7 +976,7 @@ export default function SimulatorPage() {
 
           {/* Canvas Figure Card */}
           <div className="glass-card p-4 sm:p-5">
-            {/* Top Bar directly above/beside the figure */}
+            {/* Figure Card Header */}
             <div className="flex flex-wrap items-center justify-between gap-3 mb-3 pb-3 border-b border-border/40">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono font-semibold uppercase tracking-wider text-text-muted">
@@ -987,35 +987,10 @@ export default function SimulatorPage() {
                 </span>
               </div>
 
-              {/* Side-by-side buttons on figure */}
-              <div className="flex items-center gap-2">
-                <button
-                  className="btn btn-primary btn-sm px-4 py-1.5 flex items-center gap-1.5 font-bold shadow-md shadow-primary/20"
-                  onClick={handleRelease}
-                  disabled={isAnimating}
-                  id="btn-release-canvas"
-                >
-                  <span>🚀</span>
-                  <span>{isAnimating ? 'Running…' : 'Release'}</span>
-                </button>
-                <button
-                  className="btn btn-secondary btn-sm px-3.5 py-1.5 flex items-center gap-1.5 font-semibold"
-                  onClick={handleReset}
-                  id="btn-reset-canvas"
-                >
-                  <span>🔄</span>
-                  <span>Restart</span>
-                </button>
-                <button
-                  className="btn btn-ghost btn-sm px-3 py-1.5 border border-border text-xs"
-                  onClick={handleRecord}
-                  disabled={!result}
-                  id="btn-record-canvas"
-                  title="Record this trial"
-                >
-                  <span>📝</span>
-                  <span className="hidden sm:inline">Record</span>
-                </button>
+              <div className="flex items-center gap-2 text-xs font-mono text-text-muted">
+                <span>h = <strong className="text-primary font-bold">{h.toFixed(3)} m</strong></span>
+                <span>•</span>
+                <span>y = <strong className="text-primary font-bold">{y.toFixed(2)} m</strong></span>
               </div>
             </div>
 
@@ -1032,10 +1007,49 @@ export default function SimulatorPage() {
               {!isAnimating && animProgress === 0 && (
                 <div className="absolute inset-0 flex items-end justify-center pb-12 pointer-events-none">
                   <p className="text-text-muted text-xs font-mono bg-surface-1/90 px-4 py-1.5 rounded-full border border-primary/30 shadow-lg animate-pulse-slow">
-                    👉 Click <strong className="text-primary font-bold">Release</strong> beside the diagram to launch Ball A
+                    👉 Click <strong className="text-primary font-bold">Release</strong> on the right to launch Ball A
                   </p>
                 </div>
               )}
+
+              {/* Release & Reset buttons overlaid on right side of diagram canvas */}
+              <div
+                className="absolute z-10 flex flex-col gap-2 p-2 rounded-xl bg-surface-1/85 backdrop-blur-md border border-border/70 shadow-2xl"
+                style={{ top: '50%', right: '14px', transform: 'translateY(-50%)' }}
+              >
+                <button
+                  className="btn btn-primary py-2.5 px-4 flex items-center justify-center gap-2 font-bold text-sm shadow-lg shadow-primary/25 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                  onClick={handleRelease}
+                  disabled={isAnimating}
+                  id="btn-release"
+                  aria-label="Release ball A"
+                  style={{ minWidth: '105px' }}
+                >
+                  <span>🚀</span>
+                  <span>{isAnimating ? 'Running…' : 'Release'}</span>
+                </button>
+                <button
+                  className="btn btn-secondary py-2 px-4 flex items-center justify-center gap-2 font-semibold text-sm hover:border-amber-500/50 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                  onClick={handleReset}
+                  id="btn-reset"
+                  aria-label="Reset simulation"
+                  style={{ minWidth: '105px' }}
+                >
+                  <span>🔄</span>
+                  <span>Reset</span>
+                </button>
+                <button
+                  className="btn btn-ghost py-1.5 px-3 border border-border/60 text-xs flex items-center justify-center gap-1.5 transition-all text-text-secondary hover:text-text-primary"
+                  onClick={handleRecord}
+                  disabled={!result}
+                  id="btn-record-overlay"
+                  title="Record this trial"
+                  style={{ minWidth: '105px' }}
+                >
+                  <span>📝</span>
+                  <span>Record</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1365,43 +1379,20 @@ export default function SimulatorPage() {
         {/* ── Right Column: Release Button Beside Figure + Materials + Readout ─ */}
         <div className="space-y-4">
 
-          {/* ── ACTION BUTTONS BESIDE THE FIGURE ────────────────────────── */}
+          {/* ── ACTION BUTTONS & TRIAL OBSERVATION ──────────────────────── */}
           <div className="glass-card p-5 border border-primary/25 shadow-lg shadow-primary/5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-heading text-base font-bold text-text-primary">
-                🎮 Controls Beside Figure
+                📝 Trial Observation
               </h3>
               <span className={`badge ${isAnimating ? 'badge-warning' : result ? 'badge-success' : 'badge-primary'}`}>
                 {isAnimating ? '⏳ Simulating…' : result ? '✓ Trial Complete' : '● Ready'}
               </span>
             </div>
 
-            {/* Side-by-Side Release and Restart Buttons */}
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <button
-                className="btn btn-primary py-3 flex items-center justify-center gap-2 font-bold text-base shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                onClick={handleRelease}
-                disabled={isAnimating}
-                id="btn-release"
-                aria-label="Release ball A"
-              >
-                <span>🚀</span>
-                <span>{isAnimating ? 'Running…' : 'Release'}</span>
-              </button>
-              <button
-                className="btn btn-secondary py-3 flex items-center justify-center gap-2 font-bold text-base hover:border-amber-500/50 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                onClick={handleReset}
-                id="btn-reset"
-                aria-label="Restart simulation"
-              >
-                <span>🔄</span>
-                <span>Restart</span>
-              </button>
-            </div>
-
             {/* Record Observation Button */}
             <button
-              className="btn btn-primary w-full py-2.5 flex items-center justify-center gap-2 text-sm font-semibold"
+              className="btn btn-primary w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all"
               onClick={handleRecord}
               disabled={!result}
               id="btn-record"
@@ -1413,7 +1404,7 @@ export default function SimulatorPage() {
               }}
             >
               <span>📝</span>
-              <span>Record Observation</span>
+              <span>{result ? 'Record Observation to Table' : 'Run Collision to Record'}</span>
             </button>
           </div>
 
