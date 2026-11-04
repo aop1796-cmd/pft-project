@@ -12,7 +12,7 @@ import { useAuthStore } from '../stores/authStore';
 import { calculateMeanE, calculatePercentError } from '../utils/physics';
 
 const MATERIAL_REFERENCE_E: Record<string, number> = {
-  Steel: 0.90, Glass: 0.95, Wood: 0.50, Rubber: 0.75, Clay: 0.05,
+  Steel: 0.90, Glass: 0.95, Wood: 0.50, Aluminium: 0.70, Titanium: 0.80, Alluminium: 0.70, Aluminum: 0.70, Rubber: 0.75, Clay: 0.05,
 };
 
 const SOURCES_OF_ERROR = [
@@ -196,7 +196,7 @@ export default function ReportPage() {
           value={selectedMaterial}
           onChange={(e) => setSelectedMaterial(e.target.value)}
         >
-          {Object.keys(MATERIAL_REFERENCE_E).map((m) => (
+          {['Steel', 'Glass', 'Wood', 'Aluminium', 'Titanium'].map((m) => (
             <option key={m} value={m}>{m} (e_ref = {MATERIAL_REFERENCE_E[m]})</option>
           ))}
         </select>

@@ -8,7 +8,7 @@
  *  - Ball B resting on the horizontal platform lip at Position 2
  *  - Coordinate axes: plumb line (x = 0), horizontal x-axis arrow (--> x), vertical y-axis, dimension h
  *  - Side-by-side Release and Restart buttons located right beside the figure
- *  - Dual material selection for both Ball A and Ball B across all 5 materials (Steel, Glass, Wood, Rubber, Clay)
+ *  - Dual material selection for both Ball A and Ball B across all 5 materials (Steel, Glass, Wood, Aluminium, Titanium)
  *  - Permanent, live Step-by-Step Worked Calculation panel that updates in real time
  */
 
@@ -21,23 +21,32 @@ import { useTrialsStore } from '../stores/trialsStore';
 
 // ── Constants ─────────────────────────────────────────────────────────────
 const MATERIAL_DEFAULTS: Record<string, number> = {
-  Steel: 0.90, Glass: 0.95, Wood: 0.50, Rubber: 0.75, Clay: 0.05,
+  Steel: 0.90, Glass: 0.95, Wood: 0.50, Aluminium: 0.70, Titanium: 0.80,
 };
 
 const MATERIAL_COLORS: Record<string, string> = {
-  Steel: '#94A3B8', Glass: '#93C5FD', Wood: '#B45309', Rubber: '#F59E0B', Clay: '#EA580C',
+  Steel: '#94A3B8', Glass: '#93C5FD', Wood: '#B45309', Aluminium: '#CBD5E1', Titanium: '#818CF8', Alluminium: '#CBD5E1', Aluminum: '#CBD5E1', Rubber: '#F59E0B', Clay: '#EA580C',
 };
 
 const MATERIAL_MASSES: Record<string, number> = {
-  Steel: 0.065, Glass: 0.035, Wood: 0.025, Rubber: 0.040, Clay: 0.050,
+  Steel: 0.065, Glass: 0.035, Wood: 0.025, Aluminium: 0.027, Titanium: 0.045, Alluminium: 0.027, Aluminum: 0.027, Rubber: 0.040, Clay: 0.050,
 };
 
 /**
  * Theoretical coefficient of restitution for any pair of colliding materials
  */
 function getCombinedE(matA: string, matB: string): number {
-  const eA = MATERIAL_DEFAULTS[matA] ?? 0.90;
-  const eB = MATERIAL_DEFAULTS[matB] ?? 0.90;
+  const lookupE = (m: string) => {
+    if (MATERIAL_DEFAULTS[m] !== undefined) return MATERIAL_DEFAULTS[m];
+    const low = (m || '').toLowerCase();
+    if (low.includes('alum')) return 0.70;
+    if (low.includes('titan')) return 0.80;
+    if (low.includes('rubb')) return 0.75;
+    if (low.includes('clay')) return 0.05;
+    return 0.90;
+  };
+  const eA = lookupE(matA);
+  const eB = lookupE(matB);
   if (matA === matB) return eA;
   return +(Math.sqrt(eA * eB).toFixed(3));
 }
@@ -758,7 +767,17 @@ export default function SimulatorPage() {
     queryKey: ['materials'],
     queryFn: async () => {
       const res = await api.get('/materials');
-      return res.data.data as { name: string; referenceE: number; color: string }[];
+      const list = (res.data.data || []) as { name: string; referenceE: number; color: string }[];
+      return list
+        .filter((m) => m.name !== 'Rubber' && m.name !== 'Clay')
+        .concat(
+          list.some((m) => m.name === 'Aluminium' || m.name === 'Alluminium')
+            ? []
+            : [
+                { name: 'Aluminium', referenceE: 0.70, color: '#CBD5E1' },
+                { name: 'Titanium', referenceE: 0.80, color: '#818CF8' },
+              ]
+        );
     },
     staleTime: Infinity,
   });

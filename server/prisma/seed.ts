@@ -27,9 +27,14 @@ async function main() {
     { name: 'Steel', referenceE: 0.90, color: '#6B7280', density: 7800, description: 'High-carbon steel bearing balls' },
     { name: 'Glass', referenceE: 0.95, color: '#93C5FD', density: 2500, description: 'Borosilicate glass marbles' },
     { name: 'Wood', referenceE: 0.50, color: '#92400E', density: 700, description: 'Hardwood billiard balls' },
-    { name: 'Rubber', referenceE: 0.75, color: '#F59E0B', density: 1200, description: 'Natural rubber bouncing balls' },
-    { name: 'Clay', referenceE: 0.05, color: '#D97706', density: 1600, description: 'Plasticine clay balls (near-plastic impact)' },
+    { name: 'Aluminium', referenceE: 0.70, color: '#CBD5E1', density: 2700, description: 'Solid aluminium alloy spheres' },
+    { name: 'Titanium', referenceE: 0.80, color: '#818CF8', density: 4500, description: 'Grade 5 aerospace titanium spheres' },
   ];
+
+  // Remove deprecated materials if present
+  await prisma.material.deleteMany({
+    where: { name: { in: ['Rubber', 'Clay'] } },
+  }).catch(() => {});
 
   for (const mat of materials) {
     await prisma.material.upsert({
@@ -251,7 +256,7 @@ async function main() {
       question: 'How does changing the height h affect the coefficient of restitution?',
       options: null,
       answer:
-        'Theoretically, for an ideal elastic material, e is constant regardless of h. However, in practice, e decreases slightly with increasing impact velocity (higher h) because at higher speeds the contact forces exceed the elastic limit, causing some plastic deformation and greater energy dissipation. Steel shows the smallest variation, while rubber and softer materials show a more pronounced decrease.',
+        'Theoretically, for an ideal elastic material, e is constant regardless of h. However, in practice, e decreases slightly with increasing impact velocity (higher h) because at higher speeds the contact forces exceed the elastic limit, causing some plastic deformation and greater energy dissipation. Steel shows the smallest variation, while aluminium and softer materials show a more pronounced decrease.',
       explanation: null,
       orderIndex: 14,
     },

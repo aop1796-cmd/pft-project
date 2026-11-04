@@ -17,7 +17,7 @@ const features = [
 
 const apparatus = [
   'Curved ramp with adjustable release height (h)',
-  'Two steel/glass/rubber balls (A and B)',
+  'Two balls of selectable materials (Steel, Glass, Wood, Aluminium, Titanium)',
   'Vertical platform of height y',
   'Metre scale / ruler',
   'Carbon paper for marking landing positions',

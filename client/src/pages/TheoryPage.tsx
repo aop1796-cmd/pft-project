@@ -170,7 +170,7 @@ export default function TheoryPage() {
         <h3 className="font-heading text-xl mb-2 mt-6 text-primary">7. Factors Affecting e</h3>
         <div className="grid sm:grid-cols-2 gap-3">
           {[
-            { factor: 'Material', effect: 'Steel (≈0.90), Glass (≈0.95), Rubber (≈0.75), Wood (≈0.50), Clay (≈0.05)' },
+            { factor: 'Material', effect: 'Steel (≈0.90), Glass (≈0.95), Titanium (≈0.80), Aluminium (≈0.70), Wood (≈0.50)' },
             { factor: 'Impact Velocity', effect: 'e decreases slightly with higher impact velocity due to plastic deformation' },
             { factor: 'Shape & Size', effect: 'Spheres give consistent results; irregular shapes cause oblique effects' },
             { factor: 'Surface Finish', effect: 'Rough surfaces increase energy loss; polished surfaces give higher e' },
