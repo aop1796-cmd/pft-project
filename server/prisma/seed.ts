@@ -24,11 +24,11 @@ async function main() {
 
   // ── Materials ─────────────────────────────────────────────────────────────
   const materials = [
-    { name: 'Steel', referenceE: 0.90, color: '#6B7280', density: 7800, description: 'High-carbon steel bearing balls' },
-    { name: 'Glass', referenceE: 0.95, color: '#93C5FD', density: 2500, description: 'Borosilicate glass marbles' },
-    { name: 'Wood', referenceE: 0.50, color: '#92400E', density: 700, description: 'Hardwood billiard balls' },
+    { name: 'Steel', referenceE: 0.90, color: '#94A3B8', density: 7800, description: 'High-carbon steel bearing balls' },
+    { name: 'Wood', referenceE: 0.50, color: '#B45309', density: 700, description: 'Hardwood billiard balls' },
     { name: 'Aluminium', referenceE: 0.70, color: '#CBD5E1', density: 2700, description: 'Solid aluminium alloy spheres' },
     { name: 'Titanium', referenceE: 0.80, color: '#818CF8', density: 4500, description: 'Grade 5 aerospace titanium spheres' },
+    { name: 'Glass', referenceE: 0.95, color: '#93C5FD', density: 2500, description: 'Borosilicate glass marbles' },
   ];
 
   // Remove deprecated materials if present

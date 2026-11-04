@@ -21,16 +21,24 @@ import { useTrialsStore } from '../stores/trialsStore';
 
 // ── Constants ─────────────────────────────────────────────────────────────
 const MATERIAL_DEFAULTS: Record<string, number> = {
-  Steel: 0.90, Glass: 0.95, Wood: 0.50, Aluminium: 0.70, Titanium: 0.80,
+  Steel: 0.90, Wood: 0.50, Aluminium: 0.70, Titanium: 0.80, Glass: 0.95,
 };
 
 const MATERIAL_COLORS: Record<string, string> = {
-  Steel: '#94A3B8', Glass: '#93C5FD', Wood: '#B45309', Aluminium: '#CBD5E1', Titanium: '#818CF8', Alluminium: '#CBD5E1', Aluminum: '#CBD5E1', Rubber: '#F59E0B', Clay: '#EA580C',
+  Steel: '#94A3B8', Wood: '#B45309', Aluminium: '#CBD5E1', Titanium: '#818CF8', Glass: '#93C5FD', Alluminium: '#CBD5E1', Aluminum: '#CBD5E1', Rubber: '#F59E0B', Clay: '#EA580C',
 };
 
 const MATERIAL_MASSES: Record<string, number> = {
-  Steel: 0.065, Glass: 0.035, Wood: 0.025, Aluminium: 0.027, Titanium: 0.045, Alluminium: 0.027, Aluminum: 0.027, Rubber: 0.040, Clay: 0.050,
+  Steel: 0.065, Wood: 0.025, Aluminium: 0.027, Titanium: 0.045, Glass: 0.035, Alluminium: 0.027, Aluminum: 0.027, Rubber: 0.040, Clay: 0.050,
 };
+
+const REFERENCE_MATERIALS = [
+  { name: 'Steel', referenceE: 0.90, color: '#94A3B8' },
+  { name: 'Wood', referenceE: 0.50, color: '#B45309' },
+  { name: 'Aluminium', referenceE: 0.70, color: '#CBD5E1' },
+  { name: 'Titanium', referenceE: 0.80, color: '#818CF8' },
+  { name: 'Glass', referenceE: 0.95, color: '#93C5FD' },
+];
 
 /**
  * Theoretical coefficient of restitution for any pair of colliding materials
@@ -766,21 +774,25 @@ export default function SimulatorPage() {
   const { data: materialsData } = useQuery({
     queryKey: ['materials'],
     queryFn: async () => {
-      const res = await api.get('/materials');
-      const list = (res.data.data || []) as { name: string; referenceE: number; color: string }[];
-      return list
-        .filter((m) => m.name !== 'Rubber' && m.name !== 'Clay')
-        .concat(
-          list.some((m) => m.name === 'Aluminium' || m.name === 'Alluminium')
-            ? []
-            : [
-                { name: 'Aluminium', referenceE: 0.70, color: '#CBD5E1' },
-                { name: 'Titanium', referenceE: 0.80, color: '#818CF8' },
-              ]
-        );
+      try {
+        const res = await api.get('/materials');
+        const list = (res.data?.data || []) as { name: string; referenceE: number; color: string }[];
+        const filtered = list.filter((m) => m.name !== 'Rubber' && m.name !== 'Clay');
+        const combined = [...filtered];
+        for (const req of REFERENCE_MATERIALS) {
+          if (!combined.some((m) => m.name.toLowerCase() === req.name.toLowerCase())) {
+            combined.push(req);
+          }
+        }
+        return combined;
+      } catch {
+        return REFERENCE_MATERIALS;
+      }
     },
     staleTime: Infinity,
   });
+
+  const materialList = materialsData && materialsData.length >= 4 ? materialsData : REFERENCE_MATERIALS;
 
   // ── Canvas drawing effect ─────────────────────────────────────────────────
   useEffect(() => {
@@ -1267,7 +1279,7 @@ export default function SimulatorPage() {
                     handleReset();
                   }}
                 >
-                  {(materialsData || Object.keys(MATERIAL_DEFAULTS)).map((m) => {
+                  {materialList.map((m) => {
                     const name = typeof m === 'string' ? m : (m as any).name;
                     const refE = typeof m === 'string' ? MATERIAL_DEFAULTS[m] : (m as any).referenceE;
                     return (
@@ -1298,7 +1310,7 @@ export default function SimulatorPage() {
                     handleReset();
                   }}
                 >
-                  {(materialsData || Object.keys(MATERIAL_DEFAULTS)).map((m) => {
+                  {materialList.map((m) => {
                     const name = typeof m === 'string' ? m : (m as any).name;
                     const refE = typeof m === 'string' ? MATERIAL_DEFAULTS[m] : (m as any).referenceE;
                     return (
@@ -1435,8 +1447,14 @@ export default function SimulatorPage() {
 
           {/* ── MATERIAL REFERENCE CARD (FOR BOTH BALL A AND BALL B) ───────── */}
           <div className="glass-card p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-heading text-base text-text-primary">📎 Material Reference e</h3>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-heading text-base text-text-primary flex items-center gap-2">
+                  <span>📎</span>
+                  <span>Material Reference e</span>
+                </h3>
+                <p className="text-xs text-text-muted mt-0.5">Reference coefficients & live material selection for Ball A and Ball B</p>
+              </div>
               <button
                 className="btn btn-ghost btn-sm text-xs text-primary border border-primary/20 hover:bg-primary/10 flex items-center gap-1"
                 onClick={handleSwapBalls}
@@ -1447,79 +1465,105 @@ export default function SimulatorPage() {
               </button>
             </div>
 
-            {/* Ball Selector Tabs: Select which ball you are picking material for */}
-            <div className="grid grid-cols-2 gap-2 mb-3 p-1 bg-surface-2 rounded-xl border border-border">
-              <button
-                className={`py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                  activeRefBall === 'A'
-                    ? 'bg-primary text-black font-bold shadow-sm'
-                    : 'text-text-secondary hover:text-text-primary'
-                }`}
-                onClick={() => setActiveRefBall('A')}
-                type="button"
-              >
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: colorA }} />
-                <span>Ball A: {materialA}</span>
-              </button>
-              <button
-                className={`py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                  activeRefBall === 'B'
-                    ? 'bg-primary text-black font-bold shadow-sm'
-                    : 'text-text-secondary hover:text-text-primary'
-                }`}
-                onClick={() => setActiveRefBall('B')}
-                type="button"
-              >
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: colorB }} />
-                <span>Ball B: {materialB}</span>
-              </button>
-            </div>
-
-            {/* The 5 Materials list exactly as in the user screenshot */}
-            <div className="space-y-2">
-              {(materialsData || Object.entries(MATERIAL_DEFAULTS).map(([name, referenceE]) => ({ name, referenceE }))).map((m) => {
-                const name = typeof m === 'string' ? m : (m as any).name;
-                const refE = typeof m === 'string' ? MATERIAL_DEFAULTS[m] : (m as any).referenceE;
-                const currentSelectedMat = activeRefBall === 'A' ? materialA : materialB;
-                const isSelected = name === currentSelectedMat;
-                return (
-                  <div
-                    key={name}
-                    className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all ${
-                      isSelected
-                        ? 'border border-primary bg-amber-500/10'
-                        : 'border border-transparent hover:bg-surface-2'
-                    }`}
-                    onClick={() => {
-                      if (activeRefBall === 'A') {
-                        setMaterialA(name);
-                        setMA(MATERIAL_MASSES[name] ?? 0.05);
-                        const newE = getCombinedE(name, materialB);
-                        setCustomE(newE);
-                      } else {
-                        setMaterialB(name);
-                        setMB(MATERIAL_MASSES[name] ?? 0.05);
-                        const newE = getCombinedE(materialA, name);
-                        setCustomE(newE);
-                      }
-                      handleReset();
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ background: MATERIAL_COLORS[name] || '#6B7280' }} />
-                      <span className="text-sm text-text-secondary">{name}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-primary text-sm">e ≈ {refE.toFixed(2)}</span>
-                      {isSelected && (
-                        <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-bold">
-                          Ball {activeRefBall}
-                        </span>
-                      )}
-                    </div>
+            {/* Side-by-Side: Ball A Reference Materials & Ball B Reference Materials */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Ball A Reference List */}
+              <div className="p-3 bg-surface-2/60 rounded-xl border border-border">
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: colorA }} />
+                    <span className="text-xs font-bold text-text-primary">Ball A (Impacting)</span>
                   </div>
-                );
-              })}
+                  <span className="text-[11px] font-mono text-primary font-bold">{materialA}</span>
+                </div>
+                <div className="space-y-1.5">
+                  {materialList.map((m) => {
+                    const mName = typeof m === 'string' ? m : m.name;
+                    const refVal = typeof m === 'string' ? (MATERIAL_DEFAULTS[m] ?? 0.9) : m.referenceE;
+                    const isSelected = mName === materialA;
+                    return (
+                      <button
+                        key={`ref-a-${mName}`}
+                        type="button"
+                        className={`w-full flex items-center justify-between p-2 rounded-lg text-left text-xs transition-all ${
+                          isSelected
+                            ? 'border border-primary bg-primary/15 font-semibold shadow-sm'
+                            : 'border border-transparent hover:bg-surface-3 text-text-secondary'
+                        }`}
+                        onClick={() => {
+                          setMaterialA(mName);
+                          setMA(MATERIAL_MASSES[mName] ?? 0.05);
+                          const newE = getCombinedE(mName, materialB);
+                          setCustomE(newE);
+                          handleReset();
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ background: MATERIAL_COLORS[mName] || '#6B7280' }} />
+                          <span className={isSelected ? 'text-text-primary font-bold' : 'text-text-secondary'}>{mName}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-primary text-[11px]">e ≈ {refVal.toFixed(2)}</span>
+                          {isSelected && (
+                            <span className="text-[10px] bg-primary/25 text-primary px-1.5 py-0.5 rounded font-bold">
+                              Selected
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Ball B Reference List */}
+              <div className="p-3 bg-surface-2/60 rounded-xl border border-border">
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: colorB }} />
+                    <span className="text-xs font-bold text-text-primary">Ball B (Target)</span>
+                  </div>
+                  <span className="text-[11px] font-mono text-primary font-bold">{materialB}</span>
+                </div>
+                <div className="space-y-1.5">
+                  {materialList.map((m) => {
+                    const mName = typeof m === 'string' ? m : m.name;
+                    const refVal = typeof m === 'string' ? (MATERIAL_DEFAULTS[m] ?? 0.9) : m.referenceE;
+                    const isSelected = mName === materialB;
+                    return (
+                      <button
+                        key={`ref-b-${mName}`}
+                        type="button"
+                        className={`w-full flex items-center justify-between p-2 rounded-lg text-left text-xs transition-all ${
+                          isSelected
+                            ? 'border border-primary bg-primary/15 font-semibold shadow-sm'
+                            : 'border border-transparent hover:bg-surface-3 text-text-secondary'
+                        }`}
+                        onClick={() => {
+                          setMaterialB(mName);
+                          setMB(MATERIAL_MASSES[mName] ?? 0.05);
+                          const newE = getCombinedE(materialA, mName);
+                          setCustomE(newE);
+                          handleReset();
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ background: MATERIAL_COLORS[mName] || '#6B7280' }} />
+                          <span className={isSelected ? 'text-text-primary font-bold' : 'text-text-secondary'}>{mName}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-primary text-[11px]">e ≈ {refVal.toFixed(2)}</span>
+                          {isSelected && (
+                            <span className="text-[10px] bg-primary/25 text-primary px-1.5 py-0.5 rounded font-bold">
+                              Selected
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             {/* Impact pair theoretical e footer */}
@@ -1643,8 +1687,4 @@ function ToggleOption({
       </label>
       <span className="tooltip-wrapper text-sm text-text-secondary cursor-default">
         {label}
-        <span className="tooltip">{tooltip}</span>
-      </span>
-    </div>
-  );
-}
+        <span cl
