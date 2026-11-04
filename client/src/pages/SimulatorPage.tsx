@@ -1687,4 +1687,8 @@ function ToggleOption({
       </label>
       <span className="tooltip-wrapper text-sm text-text-secondary cursor-default">
         {label}
-        <span cl
+        <span className="tooltip">{tooltip}</span>
+      </span>
+    </div>
+  );
+}
